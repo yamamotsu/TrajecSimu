@@ -31,7 +31,7 @@ class simu_main():
         
     def set_all_param(self,params):
         # =============================================
-        # TO DO: assign parameters to the instance
+        # this method assigns input parameters to the instance
         #
         # INPUT: params = contains all parameters needed (dict of dict)
         # =============================================
@@ -40,11 +40,11 @@ class simu_main():
         try:
             self.dt = params['exec']['dt']              # time step
             self.t_max = params['exec']['t_max']        # maximum time
-            self.N_record = params['exec']['N_record']  # record history every 20 iteration
+            self.N_record = params['exec']['N_record']  # record history every ** iteration
             self.integ = params['exec']['integ']        # time integration scheme
         except:
             # display error message
-            print 'Error: executive control info is missing'
+            print('Error: executive control info is missing')
             sys.exit()
         
         # launch condition
@@ -67,7 +67,7 @@ class simu_main():
             self.Cwind = params['launch']['Cwind']                    # wind coefficient
         except:
             # display error message
-            print 'Error: launch condition info is missing'
+            print('Error: launch condition info is missing')
             sys.exit()
          
         # mass/inertia properties
@@ -80,7 +80,7 @@ class simu_main():
             self.MOI_fuel = params['rocket']['MOI_fuel']  # dry MOI (moment of inertia)
         except:
             # display error message
-            print 'Error: mass property info is missing'
+            print('Error: mass property info is missing')
             sys.exit()
             
         # aerodynamic properties
@@ -98,7 +98,7 @@ class simu_main():
             self.dy_fin = params['rocket']['dy_fin']  # y step of fin discretization
         except:
             # display error message
-            print 'Error: aerodynamic property info is missing'
+            print('Error: aerodynamic property info is missing')
             sys.exit()
         
         # thrust property
@@ -107,14 +107,14 @@ class simu_main():
             self.thrustforce = params['engine']['thrust']
         except:
             # display error message
-            print 'Error: engine property info is missing'
+            print('Error: engine property info is missing')
             
         # parachute property
         try:
             self.t_deploy = params['parachute']['t_deploy']
         except:
             # display error message
-            print 'Error: parachute property info is missing'
+            print('Error: parachute property info is missing')
             
     """
     ----------------------------------------------------
@@ -124,52 +124,54 @@ class simu_main():
     
     def ODE_main(self):
         # =============================================
-        # run ODE integration of rocket trajectory
-        #
-        # TO DO: ODE integration given all parameters
+        # this method runs ODE integration given all the parameters
         #     
-        # OUTPUT: result 
+        # OUTPUT: solution: shape (len(t), len(y0))
+        #                   containing the value of y for each desired time in t, with the initial value y0 in the first row.
         # =============================================
         
         # ---------------------------------------------
         #      Initialization
         # ---------------------------------------------
         # set initial value
-        t0 = 0.  # start time
+        t0 = 0.              # start time
         u0 = self.SetupICs() # initiate state vector
 
         # number of iteration
         self.N_iter = 0
             
-        # initialize list to store the log
-        #  histry = [times,flags,]
-        self.history = [np.r_[t0,0,u0]]
-    
+        # initialize a list for backup
+        # backup = [time,flag,u]
+        self.backup = [np.r_[t0,0,u0]]
+
+        # landing time initialization: 
+        self.landing_time = self.t_max
+            
         # set flag = 1 (on launch rail)
         self.flag = 1
     
-        print '----------------------------'
-        print '  We are GO for launch'
-        print '----------------------------'
-        print ' '
-        
+        print('----------------------------')
+        print('  We are GO for launch')
+        print('----------------------------')
+        print(' ')
         
         if self.integ == 'lsoda_odeint':
             # ---------------------------------------------
-            #      scipy.odeint
+            #      use scipy.odeint
             # ---------------------------------------------
-            # time array
-            t = np.arange(t0,80,self.dt)
+            # create time array
+            self.t = np.arange(t0,self.t_max,self.dt)
             try:
                 # ---  run trajectory computation   ---
-                sol = odeint(self.f_main, u0, t)
+                self.solution = odeint(self.f_main, u0, self.t)
             except:
+                print('ode integration failed!')
                 pass
             
         else:
             # ---------------------------------------------
-            #      scipy.ode
-            # ---------------------------------------------
+            #      use scipy.ode
+            # ---------------------------------------------            
             # create ODE integration instance of scipy.integrate.ode
             r = ode(self.f_main).set_integrator(self.integ)
             # set initial value
@@ -201,8 +203,8 @@ class simu_main():
     
     def SetupICs(self):
         # =======================================
-        # setup initial condition
-        # return initial state vector u0: 13*1 array
+        # this method sets up initial conditions
+        # and returns initial state vector u0: 13*1 array
         #  u0[0:3]  = (1*3) vector: translation xyz      referring to local fixed coord.
         #  u0[3:6]  = (1*3) vector: velocity uvw         referring to body coord. 
         #  u0[6:10] = quaternion:   attitude             convert from local to body
@@ -238,7 +240,7 @@ class simu_main():
 
     def f_main(self,u,t):
         # =======================================
-        # right hand side of ODE
+        # this method is the RHS function of ODE
         #
         # INPUT: t    = time (scalar) 
         #        u    = state vector u (13*1)
@@ -249,31 +251,35 @@ class simu_main():
         #                    3 if inertial flight
         # =======================================
         
-        # swap input when we use scipy.ubtegrate
+        # if the rocket has already landed, return 0
+        if self.flag == 5:
+            return u*0.
+            
+        # swap input when we use scipy.integrate.ode
         if self.integ != 'lsoda_odeint':
             tmp = u
             u = t
             t = tmp
         #END IF
     
-        # count iteration
+        # count the number of function call
         self.N_iter += 1
         
-        # record history
+        # backuping 
         if np.mod(self.N_iter, self.N_record) == 0:
-            self.record_history(t,u)
+            self.add_backup(t,u)
         #END IF
         
         # --------------------------
-        #   subtract vectors
+        #   extract vectors
         # --------------------------
-        # x =     translation         :in fixed coordinate
-        # v =     velocity            :in body coordinate
-        # q =     atitude quaternion  :convert from fixed to body
-        # omega = angular velocity    :in body coordinate
+        # x =     translation         :expressed in local-fixed coordinate
+        # v =     velocity            :expressed in body coordinate
+        # q =     atitude quaternion  :conversion from local-fixed to body
+        # omega = angular velocity    :expressed in body coordinate
         x,v,q,omega = self.state2vecs_quat(u)  
         
-        
+    
         # ----------------------------
         #   flight mode
         # ----------------------------
@@ -286,7 +292,7 @@ class simu_main():
             print(' ')
             
             # record history
-            self.record_history(t,u)
+            self.add_backup(t,u)
             # switch into thrusted flight
             self.flag = 2   
             
@@ -300,7 +306,7 @@ class simu_main():
             print(' ')
             
             # record history
-            self.record_history(t,u)
+            self.add_backup(t,u)
             # switch into inertial flight
             self.flag = 3   
             
@@ -318,7 +324,7 @@ class simu_main():
             # switch into parachute fall
             self.flag = 4   
             
-        elif self.flag > 1 and x[2] < 0.:
+        elif self.flag > 1 and self.flag < 5 and x[2] < 0. :
             # detect landing
             print('----------------------------')
             print('  Landing at t = ',t,'[s]')
@@ -327,20 +333,20 @@ class simu_main():
             print('                   y = ',x[1],'[m]')
             print('----------------------------')
             print(' ')
+            # record landing time
+            self.landing_time = t
             
             # record history
-            self.record_history(t,u)
-            # landed
+            self.add_backup(t,u)
+            # flag: landed
             self.flag = 5 
             # quit integration
             if self.integ == 'lsoda_odeint':
-                return 0
-                
-            
+                return u*0.                
         #END IF 
             
             
-        # call mass properties
+        # call mass properties 
         mass,MOI,d_dt_MOI,CG = self.mass_MOI(t)
             
         # ----------------------------
@@ -376,7 +382,7 @@ class simu_main():
         
         # set external force depending on the state
         if self.flag == 1:
-            # on launch rail -> du/dx only. Consider rail-rocket friction 
+            # on launch rail -> du/dx only. Consider rail-rocket friction force 
             # total acceleration 
             dv_dt = -np.cross(omega,v) + np.dot(Tbl,grav) + (aeroF + self.thrust(t) + self.friction() ) / mass
             # cancell out y,z
@@ -435,15 +441,16 @@ class simu_main():
         # END IF
         
         # ----------------------------
-        #    Set back in state vector form
+        #    Set variables back in the state vector form
         # ----------------------------
         du_dt = np.r_[dx_dt,dv_dt,dq_dt,domega_dt]
         
         return du_dt
         
+        
     def mass_MOI(self,t):
         # =======================================
-        # returns mass properties of rocket
+        # this method returns mass properties of rocket
         # 
         # INPUT:  t = time
         # OUTPUT: mass = total mass of rocket
@@ -541,14 +548,24 @@ class simu_main():
         air_speed = np.linalg.norm(v_air) # air speed (positive scalar)
     
         # total angle-of-attack
-        alpha = np.arccos( -v_air[0]/air_speed )
-        if np.isnan(alpha):
+        if air_speed == 0:
             alpha = 0.
+        else:
+            alpha = np.arccos( -v_air[0]/air_speed )
+        #if np.isnan(alpha):
+        #    alpha = 0.
         
         # roll-angle
-        phi = np.arctan( v_air[1]/v_air[2] )
-        if np.isnan(phi):
-            phi = np.arctan( v_air[1]+0.0001/v_air[2]+0.0001 )
+        if v_air[2]==0:
+            if v_air[1] > 0:
+                phi = np/pi /2.
+            else:
+                phi = -np.pi /2.    
+        else:
+            phi = np.arctan( v_air[1]/v_air[2] )
+            
+        #if np.isnan(phi):
+        #    phi = np.arctan( v_air[1]+0.0001/v_air[2]+0.0001 )
             
         
         # ----------------------------------
@@ -574,7 +591,8 @@ class simu_main():
                       -(Cl*cosa + Cd*sina)*np.cos(phi)])    # need check here
         
         # force on CP of body
-        force_body = 0.5 * rho * air_speed**2. * self.X_area * C
+        q_dynamic = 0.5 * rho * air_speed**2.   # dynamic pressure q
+        force_body = q_dynamic * self.X_area * C
         
         # moment generated by body wrt CG
         moment_body = np.cross( np.array([CG-self.CP_body,0.,0.]) , force_body )
@@ -737,10 +755,15 @@ class simu_main():
         # temperature goes down 0.0065K/m until it reaches -56.5C (216.5K)
         #                                       it is approximately 11km
         T = self.T0 - 0.0065*h # [K]
-        if T < 216.5:
-            # temperature is const at 216.5 K for alt. < 20km
-            T = 216.5
+        
+        
+        # temperature is const at 216.5 K for alt. < 20km
+        if type(T) == np.ndarray:
+            T[T<216.5] = 216.5
             
+        elif T < 216.5:
+            T = 216.5
+        
         # pressure
         p = self.p0 * (T/self.T0)**5.256  #[Pa]
 
@@ -776,14 +799,42 @@ class simu_main():
         
         # drag coefficient slope
         k2 = 1.0
+        k2 = self.Cd0 / 0.17
         
-        if Mach > 0.8:
-            Mach = 0.8
+             
+        
+        if Mach > 0.95:
+            Mach = 0.95
+            
         
         Cl = k * alpha / np.sqrt(1-Mach**2.)
     
-        Cd = self.Cd0 + k2*alpha**2. / np.sqrt(1-Mach**2.)
-    
+        # Cd = (self.Cd0 + k2*alpha) / np.sqrt(1-(Mach-0.05)**2.)
+        Cd = (self.Cd0 + k2*alpha) / np.sqrt(1-Mach**2.)
+        
+        """
+        
+        # TSRP model
+        if Mach < 0.6:
+            Cd0 = 0.3
+        elif Mach < 0.8:
+            Cd0 = 0.3 + (Mach-0.6)/0.2 * (0.4-0.3)
+        elif Mach < 1.0:
+            Cd0 = 0.4 + (Mach-0.8)/0.2 * (0.62-0.4)
+        elif Mach < 1.2:
+            Cd0 = 0.62 + (Mach-1.)/0.2 * (0.70-0.62)
+        elif Mach < 1.4:
+            Cd0 = 0.7 + (Mach-1.2)/0.2 * (0.64-0.7)
+        else:
+            Cd0 = 0.5
+        k2 = Cd0 / 0.17
+        
+        Cd = Cd0 + k2*alpha
+        Cl = k * alpha / np.sqrt(abs(1-Mach**2.))
+        #print('Cd',Cd)
+        """
+        
+        
         return Cd, Cl
         
         
@@ -803,15 +854,15 @@ class simu_main():
         
         
                     
-    def record_history(self,t,u):
+    def add_backup(self,t,u):
         # ==============================================
-        # record history
+        # backup time, flag, state u
         # append vectors to the array "history"
         # ==============================================
                
         tmp = np.r_[t,self.flag,u]
         #try:
-        self.history = np.append(self.history,[tmp],axis=0)
+        self.backup = np.append(self.backup,[tmp],axis=0)
         #except:
         #    pass
         
