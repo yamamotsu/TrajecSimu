@@ -98,7 +98,7 @@ myrocket.set_parameters(engine_params,'engine')
 # run main computation
 myrocket.run()
 
-# post process
+# post-process
 myrocket.postprocess('all')
 
 

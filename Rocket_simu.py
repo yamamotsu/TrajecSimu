@@ -16,7 +16,7 @@ from mpl_toolkits.mplot3d import Axes3D
 class Rocket:
     """
     ====================================================
-    This class is a 
+    This class is.... coming soon!
     
     
     
