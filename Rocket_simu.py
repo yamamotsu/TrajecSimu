@@ -37,11 +37,10 @@ class Rocket:
         # initialize parameters: set default values
         self.execute   = self.get_default('execute')    # numerical executive parameters
         self.launch    = self.get_default('launch')     # launch condition parameters
+        self.rocket    = self.get_default('rocket')     # rocket engine parameters
         self.engine    = self.get_default('engine')     # rocket engine parameters
-        self.parachute = self.get_default('parachute')  # parachute parameters
-        self.rocket    = {}        
+        self.parachute = self.get_default('parachute')  # parachute parameters       
         return
-    
         
     def get_default(self,dict_type=None):
         # =============================================
@@ -66,25 +65,34 @@ class Rocket:
                         'T0'             : 288.,    # temperature [K] at 10m altitude
                         'p0'             : 1.013e5, # pressure [Pa] at 10m alt.
                         'wind_direction' : 0.,      # azimuth where wind is blowing from 
-                        'wind_speed'     : 2.,      # wind speed [m/s] at 10m alt. 
-                        'Cwind'          : 1./6.5,  # wind model power coefficient 
+                        'wind_speed'     : 4.,      # wind speed [m/s] at 10m alt. 
+                        'Cwind'          : 1./7.4,  # wind model power coefficient 
                         }  
                         
+        elif dict_type == 'rocket':
+            # rocket airframe parameters
+            defaults = {
+                        'aero_fin_mode'    : 'integ',  # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
+                        }
+            
         elif dict_type == 'engine':
             # rocket engine parameters
             defaults = {'t_MECO' : 9.3,   # Main Engine Cut Off (MECO) time
-                        'thrust' : 900.,  # thrust (const.)
+                        'thrust' : 800.,  # thrust (const.)
                         } 
                         
         elif dict_type == 'parachute':
             # parachute parameters
-            defaults = {'t_deploy' : 1000., # parachute deployment time
+            defaults = {'t_deploy' : 100000., # parachute deployment time from ignition
+                        't_para_delay': 1., # parachute deployment time from apogee detection
+                        'Cd_para': 1.,      # parachute drag coefficient
+                        'S_para': 0.64,     # parachute area [m^2]
                         } 
         
         return defaults
     
     
-    def set_parameters(self, params={},dict_type=None):
+    def set_parameters(self, params={}, params_type=None, data_type='dataframe'):
         # =============================================
         # this method updates default parameters with user-defined parameters. 
         #
@@ -96,26 +104,48 @@ class Rocket:
         #                    'engine'    : engine parameters
         #                    'parachute' : parachute deployment parameters
         # =============================================
-        if dict_type == 'execute':
-            # update executive parameters
-            self.execute.update(params)
+
+        if data_type == 'dict':
+            # input var type: dict 
+            if params_type == 'execute':
+                # update executive parameters
+                self.execute.update(params)
+                
+            elif params_type == 'launch':
+                # update launch condition parameters
+                self.launch.update(params)
+                
+            elif params_type == 'rocket':
+                # update rocket parameters
+                self.rocket.update(params)   
+                
+            elif params_type == 'engine':
+                # update engine parameters
+                self.engine.update(params)
+                
+            elif params_type == 'parachute':
+                # update launch condition parameters
+                self.parachute.update(params)
+            #END IF
+
+        # integrate all parameters into a dict:
+        self.params_all = {}
+        self.params_all.update(self.execute)
+        self.params_all.update(self.launch)
+        self.params_all.update(self.rocket)
+        self.params_all.update(self.engine)
+        self.params_all.update(self.parachute)
+
+        if data_type == 'dataframe':
+            # input var type: pandas dataframe
+            # note: all variables are in the same file
             
-        elif dict_type == 'launch':
-            # update launch condition parameters
-            self.launch.update(params)
+            # update (convert Dataframe -> array -> dict)
+            self.params_all.update( dict( params.as_matrix() ) )
+        #END IF   
             
-        elif dict_type == 'rocket':
-            # update rocket parameters
-            self.rocket.update(params)   
-            
-        elif dict_type == 'engine':
-            # update engine parameters
-            self.engine.update(params)
-            
-        elif dict_type == 'parachute':
-            # update launch condition parameters
-            self.parachute.update(params)
-        #END IF
+        # print(self.params_all.items(),'\n')
+        
         return
 
     """
@@ -128,18 +158,9 @@ class Rocket:
         # =============================================
         # this method runs ODE integration
         # =============================================
-        
-        # create a "dict of dict" that contains all the parameters
-        params_all = {
-                      'exec'     : self.execute,
-                      'launch'   : self.launch,
-                      'rocket'   : self.rocket,
-                      'engine'   : self.engine,
-                      'parachute': self.parachute,
-                       }
                        
         # create an instance for a trajectry simulation
-        self.trajectory = simu_main(params_all)   # providing parameters here
+        self.trajectory = simu_main(self.params_all)   # providing parameters here
         
         print('----------------------------')
         print('  Completed Parameters Setup')
@@ -177,10 +198,13 @@ class Rocket:
         print('  Post-processing')
         print('----------------------------')
         print(' ')
+        
+        x_loc = 0.
+        y_loc = 0.
        
         if process_type == 'location':
             # *** return landing location ***
-            self.show_landing_location()
+            x_loc,y_loc = self.show_landing_location()
            
         elif process_type == 'maxval':
             # *** return max M, q, speed, altitude, flight time, and landing location  ***
@@ -201,7 +225,7 @@ class Rocket:
             
             # creat time array to plot
             time = self.trajectory.t     # extract time array
-            dt = self.execute['dt']      # time step
+            dt = self.params_all['dt']      # time step
             land_time_id = int(np.ceil(self.trajectory.landing_time/dt)) # id of time array when the rocket landed
             time = time[0:land_time_id] # array before landing: cut off useless after-landing part
             # cut off useless info out of ODE solution array
@@ -224,14 +248,14 @@ class Rocket:
             # plot Mach number history
             
             # plot dynamic pressure history
-            
-            
                 
                 
         else:
             # if input variable "process_type" is incorrect, show error message
             print('error: process_type must be "location" or "max" or "all". ')
         #END IF
+        
+        return x_loc, y_loc
         
     def show_landing_location(self):
         # =============================================
@@ -247,6 +271,8 @@ class Rocket:
         print('[x,y,z] = ', xloc, yloc, zloc)
         print('----------------------------')
         
+        return xloc, yloc
+        
         
     def show_max_values(self,time):
         # =============================================
@@ -254,7 +280,15 @@ class Rocket:
         # =============================================
         
         # array of rho, a histories: use standard air
-        rho,a = self.trajectory.standard_air(self.trajectory.solution[:,2])  # provide altitude=u[2]
+        n = len(self.trajectory.solution[:,2])
+        T = np.zeros(n)
+        p = np.zeros(n)
+        rho = np.zeros(n)
+        a = np.zeros(n)
+        
+        for i in range(n):
+            T[i],p[i],rho[i],a[i] = self.trajectory.standard_air(self.trajectory.solution[i,2])  # provide altitude=u[2]
+        #END IF
         
         # array of speed history
         speed = np.linalg.norm(self.trajectory.solution[:,3:6],axis=1) # provide velocity=u[3:6]
@@ -271,14 +305,30 @@ class Rocket:
         # index of max. altitude: max. of z
         h_max = np.argmax(self.trajectory.solution[:,2])
         
+        # get wind speed at Max_Q
+        wind_vec = self.trajectory.wind(self.trajectory.solution[Q_max,2]*4.)  # provide altitude=u[2]
+        wind_speed = np.linalg.norm(wind_vec)
+
         # flight time: the last value of time array
         print('----------------------------')
-        print('Max. Mach number: ',"{0:.3f}".format(speed[M_max]/a[M_max]),' at t=',"{0:.2f}".format(time[M_max]),'[s]')
-        print('Max. Q: ', "{0:6.2e}".format(0.5*rho[Q_max]*speed[Q_max]**2.), '[Pa] at t=',"{0:.2f}".format(time[Q_max]),'[s]')
-        print('Max. speed: ', "{0:.1f}".format(speed[v_max]),'[m/s] at t=',"{0:.2f}".format(time[v_max]),'[s]')
-        print('Max. altitude: ', "{0:.1f}".format(self.trajectory.solution[h_max,2]), '[m] at t=',"{0:.2f}".format(time[h_max]),'[s]')
-        print('total flight time: ', "{0:.2f}".format(self.trajectory.landing_time),'[s]')
+        print(' Max. Mach number: ',"{0:.3f}".format(speed[M_max]/a[M_max]),' at t=',"{0:.2f}".format(time[M_max]),'[s]')
+        print(' Max. Q: ', "{0:6.2e}".format(0.5*rho[Q_max]*speed[Q_max]**2.), '[Pa] at t=',"{0:.2f}".format(time[Q_max]),'[s]')
+        print(' Max. speed: ', "{0:.1f}".format(speed[v_max]),'[m/s] at t=',"{0:.2f}".format(time[v_max]),'[s]')
+        print(' Max. altitude: ', "{0:.1f}".format(self.trajectory.solution[h_max,2]), '[m] at t=',"{0:.2f}".format(time[h_max]),'[s]')
+        print(' total flight time: ', "{0:.2f}".format(self.trajectory.landing_time),'[s]')
         print('----------------------------')
+        
+        # output flight condition at Max.Q
+        print(' Flight conditions at Max-Q.')
+        print(' free-stream pressure: ', "{0:6.2e}".format(p[Q_max]) ,'[Pa]')
+        print(' free-stream temperature: ', "{0:.1f}".format(T[Q_max]) ,'[T]')
+        print(' free-stream Mach: ', "{0:.3f}".format(speed[Q_max]/a[Q_max]) )
+        print(' Wind speed: ',  "{0:.2f}".format(wind_speed),'[m/s]')
+        print(' Angle of attack for gust rate 2: ', "{0:.1f}".format(np.arctan( wind_speed/speed[Q_max])*180./np.pi ),'[deg]')
+        print('----------------------------')
+        
+        
+        
         
         
     def visualize_trajectory(self,time):
@@ -302,26 +352,40 @@ class Rocket:
         """
         
         # split arrays for each flight mode
-        t_MECO = self.engine['t_MECO']
-        dt = self.execute['dt']
+        t_MECO = self.params_all['t_MECO']
+        t_deploy = self.trajectory.t_deploy
+        dt = self.params_all['dt']
         
         # ***_t: thrusted flight (before MECO)
-        # ***_i: inertial flight
-        time_t, time_i = np.split(time,[int(np.ceil(t_MECO/dt))])
-        xloc_t, xloc_i = np.split(xloc,[int(np.ceil(t_MECO/dt))])
-        yloc_t, yloc_i = np.split(yloc,[int(np.ceil(t_MECO/dt))])
-        zloc_t, zloc_i = np.split(zloc,[int(np.ceil(t_MECO/dt))])
-        
-        # create plot
+        # ***_c: inertial flight
+        # ***_p: parachute fall
+        try:
+            time_t, time_c, time_p = np.split(time,[ int(np.ceil(t_MECO/dt)), int(np.ceil(t_deploy/dt)) ] )
+            xloc_t, xloc_c, xloc_p = np.split(xloc,[ int(np.ceil(t_MECO/dt)), int(np.ceil(t_deploy/dt)) ] )
+            yloc_t, yloc_c, yloc_p = np.split(yloc,[ int(np.ceil(t_MECO/dt)), int(np.ceil(t_deploy/dt)) ] )
+            zloc_t, zloc_c, zloc_p = np.split(zloc,[ int(np.ceil(t_MECO/dt)), int(np.ceil(t_deploy/dt)) ] )
+        except:
+            time_t, time_c = np.split(time,[int(np.ceil(t_MECO/dt))])
+            xloc_t, xloc_c = np.split(xloc,[int(np.ceil(t_MECO/dt))])
+            yloc_t, yloc_c = np.split(yloc,[int(np.ceil(t_MECO/dt))])
+            zloc_t, zloc_c = np.split(zloc,[int(np.ceil(t_MECO/dt))])
+            
+            # create plot
         fig = plt.figure()
         ax = Axes3D(fig)
         
-        # plot thrusted trajectory
-        ax.plot(xloc_t, yloc_t, zloc_t,lw=3,label='Thrusted')
+        # plot powered-phase trajectory
+        ax.plot(xloc_t, yloc_t, zloc_t,lw=3,label='Powered')
 
-        # plot inertial trajectory
+        # plot coast-phase trajectory
         try:
-            ax.plot(xloc_i, yloc_i, zloc_i,lw=3,label='Inertial')
+            ax.plot(xloc_c, yloc_c, zloc_c,lw=3,label='Coast')
+        except:
+            pass
+        
+        # plot parachute descent-phase trajectory
+        try:
+            ax.plot(xloc_p, yloc_p, zloc_p,lw=3,label='Parachute')
         except:
             pass
             
@@ -366,13 +430,14 @@ class Rocket:
         plt.title('XYZ vs. time')
         plt.xlabel('t [s]')
         plt.ylabel('xyz [m]')
+        plt.grid()
         plt.show   
         
         return
         
     def plot_velocity(self,time):
         # =============================================
-        # this method plots u,v,w (velocity) as a function of time
+        # this method plots u,v,w (velocity wrt earth) as a function of time
         # =============================================
         
         # velocity = [u,v,w] history
@@ -403,6 +468,7 @@ class Rocket:
         plt.title('Velocity vs. time')
         plt.xlabel('t [s]')
         plt.ylabel('v [m/s]')
+        plt.grid()
         plt.show  
         
         return 
@@ -438,54 +504,9 @@ class Rocket:
         plt.title('Angular velocity vs. time')
         plt.xlabel('t [s]')
         plt.ylabel('omega [rad/s]')
+        plt.grid()
         plt.show 
         
         return
           
         
-    """          
-    def standard_air(self,h):
-        # ==============================================
-        # this method returns air property given an altitude 
-        # INPUT: h = altitude [m]
-        # ==============================================
-        
-        # temperature goes down 0.0065K/m until it reaches -56.5C (216.5K)
-        #                                       it is approximately 11km
-        T0 = self.launch['T0']
-        p0 = self.launch['p0']
-        T = T0 - 0.0065*h # [K]
-        
-        # temperature is const at 216.5 K for alt. < 20km
-        T[T<216.5] = 216.5
-            
-        # pressure
-        p = p0 * (T/T0)**5.256  #[Pa]
-
-        # density
-        rho = p/(287.15*T) #[kg/m^3]
-        
-        # acoustic speed
-        a = np.sqrt(1.4*287.15*T) # [m/s]
-        
-        return rho,a 
-        
-    """
-        
-        
-        
-         
-     
-         
-    
-    
-
-        
-        
-        
-   
-        
-        
-        
-    
-    

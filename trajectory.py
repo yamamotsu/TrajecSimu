@@ -47,10 +47,10 @@ class simu_main():
         
         # executive control
         try:
-            self.dt = params['exec']['dt']              # time step
-            self.t_max = params['exec']['t_max']        # maximum time
-            self.N_record = params['exec']['N_record']  # record history every ** iteration
-            self.integ = params['exec']['integ']        # time integration scheme
+            self.dt = float( params['dt'] )            # time step
+            self.t_max = float(params['t_max'] )       # maximum time
+            self.N_record = float(params['N_record'] ) # record history every ** iteration
+            self.integ = params['integ']               # time integration scheme
         except:
             # display error message
             print('Error: executive control info is missing')
@@ -59,21 +59,22 @@ class simu_main():
         # launch condition
         try:
             # launcher property
-            rail_length = params['launch']['rail_length']             # length of launch rail 
-            self.elev_angle = params['launch']['elev_angle']          # angle of elevation [deg]
-            self.azimuth = params['launch']['azimuth']                # north=0, east=90, south=180, west=270 [deg]
+            rail_length = float( params['rail_length'] )            # length of launch rail 
+            self.elev_angle = float( params['elev_angle'] )         # angle of elevation [deg]
+            self.azimuth = float( params['azimuth'] )               # north=0, east=90, south=180, west=270 [deg]
             self.rail_height = rail_length * np.sin(self.elev_angle * np.pi/180.) # height of launch rail in fixed coord.
-            
+
             # air property
-            self.T0 = params['launch']['T0']   # temperature [K] at 10m alt.
-            self.p0 = params['launch']['p0']   # pressure [Pa] at 10m alt.
+            self.T0 = float( params['T0'] )  # temperature [K] at 10m alt.
+            self.p0 = float( params['p0'] )  # pressure [Pa] at 10m alt.
             
             # wind property
-            wind_direction = params['launch']['wind_direction']  # azimuth where wind is blowing from [deg]
+            wind_direction = float( params['wind_direction'] )  # azimuth where wind is blowing from [deg]
             angle_wind = (-wind_direction + 90.) * np.pi/180.    # angle to which wind goes (x orients east, y orients north)
             self.wind_unitvec = -np.array([np.cos(angle_wind), np.sin(angle_wind) ,0.])
-            self.wind_speed = params['launch']['wind_speed']          # speed of wind [m/s] at 10m alt.
-            self.Cwind = params['launch']['Cwind']                    # wind coefficient
+            self.wind_speed = float( params['wind_speed'] )         # speed of wind [m/s] at 10m alt.
+            self.Cwind = float( params['Cwind'] )                   # wind coefficient
+
         except:
             # display error message
             print('Error: launch condition info is missing')
@@ -81,30 +82,38 @@ class simu_main():
          
         # mass/inertia properties
         try:
-            self.m_dry = params['rocket']['m_dry']        # dry weight of rocket i.e. exclude fuel
-            self.m_fuel = params['rocket']['m_fuel']      # fule weight // NOTE: total weight at lift off = m_dry + m_fuel
-            self.CG_dry = params['rocket']['CG_dry']      # CG of dried body (nose tip = 0)
-            self.CG_fuel = params['rocket']['CG_fuel']    # CG of fuel (assume CG_fuel = const.)
-            self.MOI_dry = params['rocket']['MOI_dry']    # dry MOI (moment of inertia)
-            self.MOI_fuel = params['rocket']['MOI_fuel']  # dry MOI (moment of inertia)
+            self.m_dry = float( params['m_dry'] )       # dry weight of rocket i.e. exclude fuel
+            self.m_fuel = float( params['m_fuel'] )     # fule weight // NOTE: total weight at lift off = m_dry + m_fuel
+            self.CG_dry = float( params['CG_dry'] )     # CG of dried body (nose tip = 0)
+            self.CG_fuel =float(  params['CG_fuel'] )   # CG of fuel (assume CG_fuel = const.)
+            self.MOI_dry = np.array([float( params['MOI_dry_x'] ), float( params['MOI_dry_y'] ), float( params['MOI_dry_z']) ])    # dry MOI (moment of inertia)
+            self.MOI_fuel = np.array([float( params['MOI_fuel_x']), float( params['MOI_fuel_y']), float( params['MOI_fuel_z']) ])  # dry MOI (moment of inertia)
         except:
             # display error message
             print('Error: mass property info is missing')
             sys.exit()
-            
+         
         # aerodynamic properties
         try:
-            self.CP_body = params['rocket']['CP_body']   # CP location without fins (budy tube+nose) (nose tip = 0)
-            self.Cd0 = params['rocket']['Cd0']           # total 0 angle-of-attack drag coefficient
-            self.X_area = params['rocket']['X_area']   # cross-sectional area
-        
-            # fin property
-            self.LE_fins = params['rocket']['LE_fins']   # root leading edge of fin location (nose tip = 0)
-            self.xFP = params['rocket']['xFP']  # array to store forcing-point locations (0=leading edge*root)
-            self.fin_len = params['rocket']['fin_len']  # fin length
-            self.r_arm = params['rocket']['r_arm'] # array of arm length for roll-spin
-            self.alpha_fins = params['rocket']['alpha_fins']  # fin attachment angle
-            self.dy_fin = params['rocket']['dy_fin']  # y step of fin discretization
+            self.CP_body = float( params['CP_body'] )  # CP location without fins (budy tube+nose) (nose tip = 0)
+            self.Cd0 = float( params['Cd0'] )          # total 0 angle-of-attack drag coefficient
+            self.X_area = np.pi*float( params['rocket_diameter'] )**2. /4.  # cross-sectional area
+            self.aero_fin_mode = params['aero_fin_mode']   # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
+            
+            if self.aero_fin_mode == 'indiv':
+                # for individual fin computation, define fin parameters here
+                self.LE_fins = float( params['LE_fins'] )  # root leading edge of fin location (nose tip = 0)
+                self.alpha_fins = float( params['fin_alpha'] ) # fin attachment angle
+                fin_h = float( params['fin_h'] )
+                fin_dis = float( params['fin_dis'] )
+                fin_y = np.linspace(fin_h/fin_dis/2. ,fin_h-fin_h/fin_dis/2. ,fin_dis)
+                fin_xLE = 1/np.tan((90.-float( params['fin_ang'])*np.pi/180.)) * fin_y   # leading edge locations
+                self.fin_len = ( float(params['fin_Ltip'])*fin_y + (fin_h-fin_y)*float(params['fin_Lroot']) )/ fin_h    # length of fin
+                self.xFP = fin_xLE + self.fin_len/4.   # forcing points  # array to store forcing-point locations (0=leading edge*root)
+                self.r_arm = fin_y + float( params['rocket_diameter'] )/2. # array of arm length for roll-spin
+                self.dy_fin = fin_h / fin_dis  # y step of fin discretization
+            # END IF
+
         except:
             # display error message
             print('Error: aerodynamic property info is missing')
@@ -112,18 +121,22 @@ class simu_main():
         
         # thrust property
         try:
-            self.t_MECO = params['engine']['t_MECO']
-            self.thrustforce = params['engine']['thrust']
+            self.t_MECO = float( params['t_MECO'] )
+            self.thrustforce = float( params['thrust'] )
         except:
             # display error message
             print('Error: engine property info is missing')
             
         # parachute property
         try:
-            self.t_deploy = params['parachute']['t_deploy']
+            self.t_deploy = float( params['t_deploy'] )         # parachute deployment time from ignition
+            self.t_para_delay = float( params['t_para_delay'] ) # parachute deployment time from apogee detection
+            self.apogee_count = 0                               # apogee count
+            self.Cd_para = float( params['Cd_para'] )           # parachute drag coefficient
+            self.S_para = float( params['S_para'] )             # parachute area [m^2]
         except:
             # display error message
-            print('Error: parachute property info is missing')
+            print('Error: parachute property info is missing')        
             
     """
     ----------------------------------------------------
@@ -159,10 +172,12 @@ class simu_main():
         # set flag = 1 (on launch rail)
         self.flag = 1
     
+        """
         print('----------------------------')
         print('  We are GO for launch')
         print('----------------------------')
         print(' ')
+        """
         
         if self.integ == 'lsoda_odeint':
             # ---------------------------------------------
@@ -194,13 +209,14 @@ class simu_main():
                 #END IF
             #END WHILE
         #END IF
-                
+        
+        """        
         print('----------------------------')
         print('   Completed trajectory computation ')
         print('----------------------------')
         print(' ')
         print(' ')
-         
+        """ 
         
         
     """
@@ -254,10 +270,12 @@ class simu_main():
         # INPUT: t    = time (scalar) 
         #        u    = state vector u (13*1)
         #
-        # NOTE:  self.flag = 0 if before ignition
-        #                    1 if on launch rail
-        #                    2 if thrusted flight
-        #                    3 if inertial flight
+        # NOTE:  self.flag = 0 before ignition
+        #                    1 : launch rail
+        #                    2 : thrusted flight
+        #                    3 : inertial flight
+        #                    4 : parachute deployed
+        #                    5 : landed
         # =======================================
         
         # if the rocket has already landed, return 0
@@ -287,16 +305,24 @@ class simu_main():
         # q =     atitude quaternion  :conversion from local-fixed to body
         # omega = angular velocity    :expressed in body coordinate
         x,v,q,omega = self.state2vecs_quat(u)  
-        
-    
+         
+            
         # ----------------------------
-        #   flight mode
+        #    Direction Cosine Matrix for input q
+        # ----------------------------
+        # Tbl = transform from local(fixed) coordinate to body coord.
+        #     note: as_rotation_matrix is for vector rotation
+        #         -> for coordinate rotation, input conj(q)
+        Tbl = quaternion.as_rotation_matrix(np.conj(q))
+        
+        # ----------------------------
+        #   flight mode classification
         # ----------------------------
         if self.flag==1 and x[2] > self.rail_height:
             # detect launch clear
             print('----------------------------')
             print('  Launcher-clear at t = ',t,'[s]')
-            print('  current speed: ',np.linalg.norm(v),'[m/s]')
+            print('  ground speed: ',np.linalg.norm(v),'[m/s]')
             print('----------------------------')
             print(' ')
             
@@ -310,7 +336,7 @@ class simu_main():
             print('----------------------------')
             print('  MECO at t = ',t,'[s]')
             print('  current altitude: ',x[2],'[m]')
-            print('          speed:    ',np.linalg.norm(v),'[m/s]')
+            print('  ground speed:    ',np.linalg.norm(v),'[m/s]')
             print('----------------------------')
             print(' ')
             
@@ -319,19 +345,28 @@ class simu_main():
             # switch into inertial flight
             self.flag = 3   
             
-        elif (self.flag==2 or self.flag==3) and t >= self.t_deploy:
+        elif self.flag==3 and t >= self.t_deploy:
             # detect parachute deployment
+            # air speed
+            air_speed = np.linalg.norm( -v + np.dot( Tbl,self.wind(x[2]) ) ) 
             print('----------------------------')
-            print('  Parachute deployed at t = ',t,'[s]')
-            print('  current altitude: ',x[2],'[m]')
-            print('          speed:    ',np.linalg.norm(v),'[m/s]')
+            print('  Parachute deployed at t = ', t, '[s]')
+            print('  current altitude: ', x[2], '[m]')
+            print('  ground speed:    ', np.linalg.norm(v), '[m/s]')
+            print('  true air speed: ', air_speed, '[m/s]')
             print('----------------------------')
             print(' ')
             
             # record history
-            self.record_history(t,u)
+            self.add_backup(t,u)
             # switch into parachute fall
-            self.flag = 4   
+            self.flag = 4  
+            
+            
+            # stop rotation
+            omega = np.zeros(3)
+            
+            
             
         elif self.flag > 1 and self.flag < 5 and x[2] < 0. :
             # detect landing
@@ -353,18 +388,6 @@ class simu_main():
             if self.integ == 'lsoda_odeint':
                 return u*0.                
         #END IF 
-            
-            
-        # call mass properties 
-        mass,MOI,d_dt_MOI,CG = self.mass_MOI(t)
-            
-        # ----------------------------
-        #    Direction Cosine Matrix for input q
-        # ----------------------------
-        # Tbl = transform from local(fixed) coordinate to body coord.
-        #     note: as_rotation_matrix is for vector rotation
-        #         -> for coordinate rotation, input conj(q)
-        Tbl= quaternion.as_rotation_matrix(np.conj(q))
         
         
         # ----------------------------
@@ -374,6 +397,8 @@ class simu_main():
         # convert v from body coord. to fixed coord.
         dx_dt = np.dot(Tbl.T,v)
         
+        # call mass properties 
+        mass,MOI,d_dt_MOI,CG = self.mass_MOI(t)
         
         # ----------------------------
         #    2. Velocity
@@ -406,13 +431,23 @@ class simu_main():
             # thrust OFF
             # total acceleration 
             dv_dt = -np.cross(omega,v) + np.dot(Tbl,grav) + aeroF / mass
+
+        elif self.flag == 4:
+            # parachute deployed
+            dv_dt = np.dot(Tbl,grav) + self.parachute_F(x,v,Tbl) / mass
         #END IF
+        
         
         # ----------------------------
         #    3. Atitude 
         # ----------------------------
         # represented in quaternion which rotates from fixed to body
         # quaternion differential equation
+        
+        # stop rotation when parachute ihas deployed
+        if self.flag == 4:
+            omega *= 0.
+        #END IF
         
         # convert omega to quaternion
         q_omega = np.r_[[0.], omega]
@@ -424,6 +459,7 @@ class simu_main():
         # convert back to float array
         dq_dt = quaternion.as_float_array(dq_dt2)
         
+        
         # ----------------------------
         #    4. Angular velocity
         # ----------------------------
@@ -433,9 +469,10 @@ class simu_main():
         #             aeroM     = aeroM(u):     function of state 
         #             ThrustM   = ThrustM(t)=0: function of time
         
-        if self.flag == 1:
-            # on launch rail -> no angular velocity change
+        if self.flag == 1 or self.flag == 4:
+            # on launch rail /parachute deployed -> no angular velocity change
             domega_dt = np.zeros(3)
+
         else:
             # MOI1 = MOI(t)           # moment of inertia     
             # d_dt_MOI1 = d_dt_MOI(t) # time derivative of MOI
@@ -448,11 +485,27 @@ class simu_main():
             #domega_dt = np.array([tmp1,tmp2,tmp3])
             domega_dt = (-np.cross(omega,MOI*omega) - d_dt_MOI*omega + aeroM) / MOI
         # END IF
-        
+
         # ----------------------------
         #    Set variables back in the state vector form
         # ----------------------------
         du_dt = np.r_[dx_dt,dv_dt,dq_dt,domega_dt]
+
+        # ----------------------------
+        #      apogee detection 
+        # ----------------------------
+        if dx_dt[2] < 0.:
+            self.apogee_count += 1
+            
+            if self.apogee_count >= 10:
+                # detect apogee and set parachute deployment time
+                # parachute is deployed at t = t_deploy, 
+                # which is either "t_deploy" [s] after ignition or
+                # "t_para_delay" [s] after apogee detection
+                self.t_deploy = min( self.t_deploy, t + self.t_para_delay )
+                self.apogee_count = -1.e10
+            #END IF
+        #END IF
         
         return du_dt
         
@@ -561,17 +614,30 @@ class simu_main():
             alpha = 0.
         else:
             alpha = np.arccos( -v_air[0]/air_speed )
+            #if v_air[0] > 0:
+            #    alpha = -alpha
+            #END IF
+        #END IF
+        
         #if np.isnan(alpha):
         #    alpha = 0.
         
         # roll-angle
         if v_air[2]==0:
-            if v_air[1] > 0:
-                phi = np/pi /2.
+            # if w = 0, atan(v/w) is not defined 
+            if -v_air[1] > 0:
+                phi = np.pi /2.
             else:
                 phi = -np.pi /2.    
         else:
-            phi = np.arctan( v_air[1]/v_air[2] )
+            phi = np.arctan( -v_air[1]/ -v_air[2] )
+            if -v_air[2]<0:
+                # if w<0, that is in 3rd or 4th quadrant in yz-plane, add pi to phi
+                #  so that sign of sin(phi), cos(phi) will be correctly calculated.
+                phi += np.pi
+            #END IF
+        #END IF
+                
             
         #if np.isnan(phi):
         #    phi = np.arctan( v_air[1]+0.0001/v_air[2]+0.0001 )
@@ -581,7 +647,10 @@ class simu_main():
         #   force on body excluding fins
         # ----------------------------------
         # air property at the altitude
-        rho,a = self.standard_air(x[2])
+        _,_,rho,a = self.standard_air(x[2])
+        
+        #print('h',x[2],'T',T,'p',p,'rho',rho)
+        #print('h',x[2],'rho',rho)
         
         # Mach number
         Mach = air_speed/a
@@ -592,35 +661,38 @@ class simu_main():
         # convert coefficient to body coord.
         cosa = np.cos(alpha)
         sina = np.sin(alpha)
+        
         #C1b = -Cl*sina + Cd*cosa
         #C2b = -(Cl*cosa + Cd*sina)*np.sin(phi)
         #C3b = (Cl*cosa + Cd*sina)*np.cos(phi)
-        C = np.array([- (-Cl*sina + Cd*cosa), \
-                      -(Cl*cosa + Cd*sina)*np.sin(phi), \
-                      -(Cl*cosa + Cd*sina)*np.cos(phi)])    # need check here
+        C = np.array([ (-Cl*sina + Cd*cosa), \
+                      (Cl*cosa + Cd*sina)*np.sin(phi), \
+                      (Cl*cosa + Cd*sina)*np.cos(phi)])    # need check here
         
         # force on CP of body
-        q_dynamic = 0.5 * rho * air_speed**2.   # dynamic pressure q
-        force_body = q_dynamic * self.X_area * C
+        force_all = 0.5 * rho * air_speed**2. * self.X_area * (-C)
         
         # moment generated by body wrt CG
-        moment_body = np.cross( np.array([CG-self.CP_body,0.,0.]) , force_body )
+        moment_all = np.cross( np.array([CG-self.CP_body,0.,0.]) , force_all )
         
-        # ----------------------------------
-        #   force on fins
-        # ----------------------------------
-        # force and moment (wrt fin Leading edge)
-        force_fin, moment_fin_tmp = self.fin_aero(v_air,omega[0],rho)
-        # moment generated by fin wrt CG
-        moment_fin = moment_fin_tmp + np.cross( np.array([CG-self.LE_fins,0.,0.]) , force_fin )
+        print('Cd,Cl', Cd,Cl, 'alpha', alpha*180/np.pi)
+        #print('')
         
-        # ----------------------------------
-        #  total force and moment
-        # ----------------------------------
-        # total force
-        force_all = force_body + force_fin
-        # total moment
-        moment_all = moment_body + moment_fin
+        
+        if self.aero_fin_mode == 'indiv':
+            # ----------------------------------
+            #   compute force on fins individually
+            # ----------------------------------
+            # force and moment (wrt fin Leading edge)
+            force_fin, moment_fin_tmp = self.fin_aero(v_air,omega[0],rho)
+            # moment generated by fin wrt CG
+            moment_fin = moment_fin_tmp + np.cross( np.array([CG-self.LE_fins,0.,0.]) , force_fin )
+            
+            # total force
+            force_all += force_fin
+            # total moment
+            moment_all += moment_fin
+        # END IF 
         
         return force_all, moment_all
         
@@ -753,7 +825,29 @@ class simu_main():
         
         return force_all, moment_all
     
+    def parachute_F(self,x,v,Tbl):
+        # =======================================
+        # returns aerodynamic force and moment 
+        #
+        # INPUT:  x     = translation         :in fixed coordinate
+        #         v     = velocity            :in body coordinate
+        #         Tbl   = transform matrix from local(fixed) coordinate to body coord.
+        # OUTOUT: parachute_drag  = parachute drag force in body coord.
+        # =======================================
         
+        # air velocity = -rocket_velocity + wind_velocity
+        #    NOTE: wind(x) is wind velocity in local coord. need conversion to body coord.
+        v_air = -v + np.dot( Tbl,self.wind(x[2]) )   
+
+        # air property at the altitude
+        _,_,rho,_ = self.standard_air(x[2])
+
+        # parachute drag force 
+        parachute_drag = 0.5 * rho * np.linalg.norm(v_air) * v_air * self.S_para * self.Cd_para
+
+        # print('v_air', v_air, 'speed', np.linalg.norm(v_air))
+        return parachute_drag
+
         
     def standard_air(self,h):
         # ==============================================
@@ -761,6 +855,13 @@ class simu_main():
         # INPUT: h = altitude [m]
         # ==============================================
         
+        # gas constant
+        R = 287.15  # [J/kg.K]
+        # gravitational accel.
+        g = 9.81  # [m/s^2]
+        
+        
+        """
         # temperature goes down 0.0065K/m until it reaches -56.5C (216.5K)
         #                                       it is approximately 11km
         T = self.T0 - 0.0065*h # [K]
@@ -775,14 +876,58 @@ class simu_main():
         
         # pressure
         p = self.p0 * (T/self.T0)**5.256  #[Pa]
-
+        """
+        
+        
+        if h <= 11.*10**3:
+            # *** Troposphere ***
+            # temperature lapse rate
+            gamma = -0.0065
+            # temperature 
+            T = self.T0 + gamma * h # [K]
+            #pressure
+            p = self.p0 * (T/self.T0)**(-g/(gamma*R)) #[Pa]
+            
+        elif h <= 20.*10**3:
+            # *** Tropopause ***
+            # temperature is const at 11km-20km
+            # p11 = pressure at 11km alt.
+            T,p11,_,_ = self.standard_air(11000.)
+            # pressure 
+            p = p11 * np.exp( (-g/(R*T)) * (h-11000.) )
+            
+        elif h <= 32.*10**3:
+            # *** Stratosphere 1 ***
+            # temp, pressure at 20km alt.
+            T20,p20,_,_ = self.standard_air(20000.)
+            # temperature lapse rate
+            gamma = 0.001
+            # temperature 
+            T = T20 + gamma * (h-20000.) # [K]
+            #pressure
+            p = p20 * (T/T20)**(-g/(gamma*R)) #[Pa] 
+            
+        elif h <= 47.*10**3:
+            # *** Stratosphere 2 ***
+            # temp, pressure at 32km alt.
+            T32,p32,_,_ = self.standard_air(32000.)
+            # temperature lapse rate
+            gamma = 0.0028
+            # temperature 
+            T = T32 + gamma * (h-32000.) # [K]
+            #pressure
+            p = p32 * (T/T32)**(-g/(gamma*R)) #[Pa] 
+            
+        #END IF
+        
+            
         # density
-        rho = p/(287.15*T) #[kg/m^3]
+        rho = p/(R*T) #[kg/m^3]
         
         # acoustic speed
-        a = np.sqrt(1.4*287.15*T) # [m/s]
+        a = np.sqrt(1.4*R*T) # [m/s]
         
-        return rho,a 
+        return T,p,rho,a 
         
     
     def wind(self,h):
@@ -793,7 +938,7 @@ class simu_main():
         # INPUT: h = altitude [m]
         # ==============================================
         
-        # wind velocity in 
+        # wind velocity in local fixed coordinate
         wind_vec = self.wind_unitvec * self.wind_speed * (h/10.)**self.Cwind  
 
         return wind_vec
@@ -802,48 +947,67 @@ class simu_main():
         
         
     def rocket_coeff_nofins(self, Mach,alpha):
+        # input: Mach number
+        #        alpha: angle of attack[rad]
+        # -------------------
+        # Lift Coefficient
+        # -------------------
         
-        # lift coefficient slope
-        k = 1.0
+        if self.aero_fin_mode == 'indiv':
+            # lift coefficient slope for fin-body individual computations
+            #  : slope for body Cl
+            k1 = 1.
+        else:
+            # lift coefficient slope for fin-body integrated computations
+            k1 = 15.0
+        # END IF
+        Cl = k1 * alpha 
         
-        # drag coefficient slope
-        k2 = 1.0
-        k2 = self.Cd0 / 0.17
+        #
+        AoA_sep = 20.  # AoA at when flow separation occurs
+        if alpha > AoA_sep*np.pi/180.:
+            # if AoA is larger than 15 deg, assume separation and loss of Cl
+            Cl_sep = k1 * AoA_sep*np.pi/180. # Cl at alpha=15 
+            A = 0.1
+            Cl = Cl_sep * np.exp( -A*( alpha-AoA_sep*np.pi/180. ) )
+        #END IF
         
-             
-        
-        if Mach > 0.95:
-            Mach = 0.95
-            
-        
-        Cl = k * alpha / np.sqrt(1-Mach**2.)
-    
+        # -------------------
+        # Drag Coefficient
+        # -------------------
+        # drag coefficient "amplitude" for cosign curve fit
+        Cd_bar = 5.
         # Cd = (self.Cd0 + k2*alpha) / np.sqrt(1-(Mach-0.05)**2.)
-        Cd = (self.Cd0 + k2*alpha) / np.sqrt(1-Mach**2.)
+        Cd = self.Cd0 + Cd_bar*( np.cos(2*alpha + np.pi) +1. ) 
         
-        """
+        # compressiblity correction
+        if Mach > 0.94:
+            Mach = 0.94
+        # END IF
         
+        Cd /= np.sqrt(1-Mach**2.)
+        
+        # print('AoA',alpha*180/np.pi, 'CL',Cl)
+        """            
         # TSRP model
         if Mach < 0.6:
-            Cd0 = 0.3
+            Cd00 = 0.3
         elif Mach < 0.8:
-            Cd0 = 0.3 + (Mach-0.6)/0.2 * (0.4-0.3)
+            Cd00 = 0.3 + (Mach-0.6)/0.2 * (0.4-0.3)
         elif Mach < 1.0:
-            Cd0 = 0.4 + (Mach-0.8)/0.2 * (0.62-0.4)
+            Cd00 = 0.4 + (Mach-0.8)/0.2 * (0.62-0.4)
         elif Mach < 1.2:
-            Cd0 = 0.62 + (Mach-1.)/0.2 * (0.70-0.62)
+            Cd00 = 0.62 + (Mach-1.)/0.2 * (0.70-0.62)
         elif Mach < 1.4:
-            Cd0 = 0.7 + (Mach-1.2)/0.2 * (0.64-0.7)
+            Cd00 = 0.7 + (Mach-1.2)/0.2 * (0.64-0.7)
         else:
-            Cd0 = 0.5
-        k2 = Cd0 / 0.17
+            Cd00 = 0.5
+        k2 = Cd00 / 0.17
         
-        Cd = Cd0 + k2*alpha
-        Cl = k * alpha / np.sqrt(abs(1-Mach**2.))
+        Cd = Cd00 + k2*alpha
         #print('Cd',Cd)
-        """
-        
-        
+        """               
+
         return Cd, Cl
         
         

@@ -1,0 +1,72 @@
+$
+$
+$  ROCKET PARAMETER DEFINITION
+$
+$
+
+$ parameter,value
+
+$
+$ rocket airframe parameters
+$
+rocket_height, 3.4
+rocket_diameter, 0.17 
+m_dry, 36.
+m_fuel, 18.
+CG_dry, 2.2
+CG_fuel, 2.
+MOI_dry_x, 0.2007
+MOI_dry_y, 33.888
+MOI_dry_z, 33.888
+MOI_fuel_x, 0.03
+MOI_fuel_y, 1.5
+MOI_fuel_z, 1.5
+
+$
+$ rocket aerodynamic parameters
+$
+CP_body, 2.7
+$ CFD-based CP: 2.7
+Cd0, 0.6
+$aero_fin_mode,indiv
+
+$
+$ fin configuration
+$
+$fin_alpha, 0.  
+$LE_fins, 3.  
+$fin_Lroot, 0.4  
+$fin_Ltip, 0.2   
+$fin_h, 0.14     
+$fin_ang, 47.5   
+$fin_dis, 3
+
+$
+$ numerical parameters
+$
+dt, 0.001
+t_max, 1.
+
+$              
+$ launch parameters
+$
+elev_angle, 80.
+azimuth, 0.  
+wind_direction, 180.
+wind_speed, 7.
+rail_length, 5.
+
+$
+$ engine parameters
+$
+t_MECO, 10.
+thrust, 2500.
+
+$
+$ parachute parameters
+$
+t_para_delay, 1.
+Cd_para, 1.
+S_para, 0.712
+
+
