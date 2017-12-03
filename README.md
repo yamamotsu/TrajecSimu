@@ -1,2 +1,7 @@
 # TrajecSimu
-Trajectory simulation of high-power rockets
+Trajectory simulation for high-power rockets
+by Shugo Kaneko
+
+
+
+

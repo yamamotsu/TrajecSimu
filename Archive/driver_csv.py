@@ -8,7 +8,7 @@ Created on Thu Nov  2 01:05:10 2017
 
 import numpy as np
 import pandas as pd
-from Rocket_simu import Rocket
+from Rocket_simu import Rocket_simu
 
 # -------------------------
 #  simulation purpose selection
@@ -18,9 +18,12 @@ from Rocket_simu import Rocket
 simu_type = 'loopp'
 
 # -------------------------
+
+
 # read csv file that contains parameters
 # params_df = pd.read_csv('test.csv',comment='$') # '$' denotes commet out
-params_df = pd.read_csv('felix_parameter.csv', comment='$', names=('parameter', 'value') ) # '$' denotes commet out
+csv_filename = 'Parameters_csv/newmitei_parameters_B64.csv'
+params_df = pd.read_csv(csv_filename, comment='$', names=('parameter', 'value') ) # '$' denotes commet out
 
 # get simulation type
 #try:
@@ -34,7 +37,7 @@ params_df = pd.read_csv('felix_parameter.csv', comment='$', names=('parameter', 
 # params_df.value = params_df.value.convert_objects(convert_numeric=True)
 
 # create instance
-myrocket = Rocket()
+myrocket = Rocket_simu()
 
 if simu_type == 'loop':
     # -----------------------
@@ -51,7 +54,7 @@ if simu_type == 'loop':
     loc_bal = np.zeros((len(wind_speed_array), len(wind_angle_array), 2) )
     loc_para = np.zeros((len(wind_speed_array), len(wind_angle_array), 2) )
     
-    # loop count initializatino
+    # loop count initialization
     i_speed = 0
     
     
@@ -74,10 +77,9 @@ if simu_type == 'loop':
             params_df.loc[params_df.parameter == 't_para_delay', 'value'] = 100000.
             # params_df.loc[params_df.parameter == 't_deploy', 'value'] = 100000.
             
-            # set all parameters
-            myrocket.set_parameters(params_df)
             # run main computation
-            myrocket.run()
+            myrocket.run(params_df)
+            
             # post-process
             loc_bal[i_speed,i_angle,:] = myrocket.postprocess('location')
             
@@ -89,10 +91,8 @@ if simu_type == 'loop':
             params_df.loc[params_df.parameter == 't_para_delay', 'value'] = 1.
             # params_df.loc[params_df.parameter == 't_deploy', 'value'] = 28.
             
-            # set all parameters
-            myrocket.set_parameters(params_df)
             # run main computation
-            myrocket.run()
+            myrocket.run(params_df)
             # post-process
             loc_para[i_speed,i_angle,:] = myrocket.postprocess('location')
            
@@ -112,11 +112,8 @@ else:
     # -------------------------
     #  Single trajectory simulation for detail
     # -------------------------
-    # set all parameters
-    myrocket.set_parameters(params_df)
-    
     # run main computation
-    myrocket.run()
+    myrocket.run(params_df)
     
     # post-process
     myrocket.postprocess('all')

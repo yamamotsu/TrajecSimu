@@ -5,142 +5,43 @@ Created on Sat Jul  8 23:06:17 2017
 
 @author: shugo
 """
-import sys
+
 import numpy as np
 from scipy.integrate import ode, odeint
+from scipy import fftpack, interpolate, integrate
+import pandas as pd
 import quaternion 
+from Rocket_simu import Rocket_simu
+import matplotlib.pyplot as plt
 
-class simu_main():
+class trajec_main(Rocket_simu):
     """
     ====================================================
-    This class is.... coming soon!
-    
-    
-    
+    This class is a sub-class for main ODE trajecotry computation
     ====================================================
     """
     
-    
     """
     ----------------------------------------------------
-    ------     Methods for initial setup        --------
+        Method for initial setup    
     ----------------------------------------------------
     """
-    
-    def __init__(self,params):
+    def __init__(self, params_df):
         # =============================================
-        # this method is called when instance is created
+        # this method is called when instance is created. Parameter setup is also done by this method.
         #
-        # INPUT: params = contains all parameters needed
+        # INPUT: params_df = parameters contains all parameters needed
         # =============================================
-        
-        # assign parameters 
-        self.set_all_param(params)
-        
-        
-    def set_all_param(self,params):
-        # =============================================
-        # this method assigns input parameters to the instance
-        #
-        # INPUT: params = contains all parameters needed (dict of dict)
-        # =============================================
-        
-        # executive control
-        try:
-            self.dt = float( params['dt'] )            # time step
-            self.t_max = float(params['t_max'] )       # maximum time
-            self.N_record = float(params['N_record'] ) # record history every ** iteration
-            self.integ = params['integ']               # time integration scheme
-        except:
-            # display error message
-            print('Error: executive control info is missing')
-            sys.exit()
-        
-        # launch condition
-        try:
-            # launcher property
-            rail_length = float( params['rail_length'] )            # length of launch rail 
-            self.elev_angle = float( params['elev_angle'] )         # angle of elevation [deg]
-            self.azimuth = float( params['azimuth'] )               # north=0, east=90, south=180, west=270 [deg]
-            self.rail_height = rail_length * np.sin(self.elev_angle * np.pi/180.) # height of launch rail in fixed coord.
+        # setup parameters in the instance by calling superclasses method
+        super().__init__()
+        self.overwrite_parameters(params_df)   
 
-            # air property
-            self.T0 = float( params['T0'] )  # temperature [K] at 10m alt.
-            self.p0 = float( params['p0'] )  # pressure [Pa] at 10m alt.
-            
-            # wind property
-            wind_direction = float( params['wind_direction'] )  # azimuth where wind is blowing from [deg]
-            angle_wind = (-wind_direction + 90.) * np.pi/180.    # angle to which wind goes (x orients east, y orients north)
-            self.wind_unitvec = -np.array([np.cos(angle_wind), np.sin(angle_wind) ,0.])
-            self.wind_speed = float( params['wind_speed'] )         # speed of wind [m/s] at 10m alt.
-            self.Cwind = float( params['Cwind'] )                   # wind coefficient
+        return None     
 
-        except:
-            # display error message
-            print('Error: launch condition info is missing')
-            sys.exit()
-         
-        # mass/inertia properties
-        try:
-            self.m_dry = float( params['m_dry'] )       # dry weight of rocket i.e. exclude fuel
-            self.m_fuel = float( params['m_fuel'] )     # fule weight // NOTE: total weight at lift off = m_dry + m_fuel
-            self.CG_dry = float( params['CG_dry'] )     # CG of dried body (nose tip = 0)
-            self.CG_fuel =float(  params['CG_fuel'] )   # CG of fuel (assume CG_fuel = const.)
-            self.MOI_dry = np.array([float( params['MOI_dry_x'] ), float( params['MOI_dry_y'] ), float( params['MOI_dry_z']) ])    # dry MOI (moment of inertia)
-            self.MOI_fuel = np.array([float( params['MOI_fuel_x']), float( params['MOI_fuel_y']), float( params['MOI_fuel_z']) ])  # dry MOI (moment of inertia)
-        except:
-            # display error message
-            print('Error: mass property info is missing')
-            sys.exit()
-         
-        # aerodynamic properties
-        try:
-            self.CP_body = float( params['CP_body'] )  # CP location without fins (budy tube+nose) (nose tip = 0)
-            self.Cd0 = float( params['Cd0'] )          # total 0 angle-of-attack drag coefficient
-            self.X_area = np.pi*float( params['rocket_diameter'] )**2. /4.  # cross-sectional area
-            self.aero_fin_mode = params['aero_fin_mode']   # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
-            
-            if self.aero_fin_mode == 'indiv':
-                # for individual fin computation, define fin parameters here
-                self.LE_fins = float( params['LE_fins'] )  # root leading edge of fin location (nose tip = 0)
-                self.alpha_fins = float( params['fin_alpha'] ) # fin attachment angle
-                fin_h = float( params['fin_h'] )
-                fin_dis = float( params['fin_dis'] )
-                fin_y = np.linspace(fin_h/fin_dis/2. ,fin_h-fin_h/fin_dis/2. ,fin_dis)
-                fin_xLE = 1/np.tan((90.-float( params['fin_ang'])*np.pi/180.)) * fin_y   # leading edge locations
-                self.fin_len = ( float(params['fin_Ltip'])*fin_y + (fin_h-fin_y)*float(params['fin_Lroot']) )/ fin_h    # length of fin
-                self.xFP = fin_xLE + self.fin_len/4.   # forcing points  # array to store forcing-point locations (0=leading edge*root)
-                self.r_arm = fin_y + float( params['rocket_diameter'] )/2. # array of arm length for roll-spin
-                self.dy_fin = fin_h / fin_dis  # y step of fin discretization
-            # END IF
-
-        except:
-            # display error message
-            print('Error: aerodynamic property info is missing')
-            sys.exit()
         
-        # thrust property
-        try:
-            self.t_MECO = float( params['t_MECO'] )
-            self.thrustforce = float( params['thrust'] )
-        except:
-            # display error message
-            print('Error: engine property info is missing')
-            
-        # parachute property
-        try:
-            self.t_deploy = float( params['t_deploy'] )         # parachute deployment time from ignition
-            self.t_para_delay = float( params['t_para_delay'] ) # parachute deployment time from apogee detection
-            self.apogee_count = 0                               # apogee count
-            self.Cd_para = float( params['Cd_para'] )           # parachute drag coefficient
-            self.S_para = float( params['S_para'] )             # parachute area [m^2]
-        except:
-            # display error message
-            print('Error: parachute property info is missing')        
-            
     """
     ----------------------------------------------------
-    ----     Method for main ODE integration      ------
+        Method for main ODE integration  
     ----------------------------------------------------
     """
     
@@ -184,6 +85,7 @@ class simu_main():
             #      use scipy.odeint
             # ---------------------------------------------
             # create time array
+            
             self.t = np.arange(t0,self.t_max,self.dt)
             try:
                 # ---  run trajectory computation   ---
@@ -217,14 +119,15 @@ class simu_main():
         print(' ')
         print(' ')
         """ 
-        
-        
-    """
-    ----------------------------------------------------
-    ----     Other methods for simulation         ------
-    ----------------------------------------------------
-    """
 
+        return None   
+        
+
+    """
+    ----------------------------------------------------
+        Other methods for simulation      
+    ----------------------------------------------------
+    """
     
     def SetupICs(self):
         # =======================================
@@ -362,11 +265,8 @@ class simu_main():
             # switch into parachute fall
             self.flag = 4  
             
-            
             # stop rotation
-            omega = np.zeros(3)
-            
-            
+            omega = np.zeros(3)  
             
         elif self.flag > 1 and self.flag < 5 and x[2] < 0. :
             # detect landing
@@ -421,6 +321,12 @@ class simu_main():
             dv_dt = -np.cross(omega,v) + np.dot(Tbl,grav) + (aeroF + self.thrust(t) + self.friction() ) / mass
             # cancell out y,z
             dv_dt = np.array([dv_dt[0],0.,0.])
+            
+            if dv_dt[0] < 0:
+                # when du/dx is negative (i.e. weight is greater that thrust)
+                # -> rocket is hold up. return zero acceleration
+                dv_dt = np.zeros(3)
+            #END
             
         elif self.flag == 2:
             # thrust ON
@@ -502,6 +408,7 @@ class simu_main():
                 # parachute is deployed at t = t_deploy, 
                 # which is either "t_deploy" [s] after ignition or
                 # "t_para_delay" [s] after apogee detection
+                
                 self.t_deploy = min( self.t_deploy, t + self.t_para_delay )
                 self.apogee_count = -1.e10
             #END IF
@@ -573,7 +480,14 @@ class simu_main():
         # INPUT:  t = time
         # OUTPUT: T = thrust vector in body coord.
         # =======================================
-        T = np.array([self.thrustforce,0.,0.])
+        
+        # rectangle thrust
+        # T = np.array([self.thrustforce,0.,0.])
+        
+        # use interp1d
+        thrust = self.thrust_function(t)
+        T = np.array([thrust,0.,0.])
+        
         return T
         
         
@@ -584,7 +498,8 @@ class simu_main():
         # INPUT:  t = time
         # OUTPUT: fric = friction force vector in body coord.
         # =======================================
-        return np.array([-5.,0.,0.])
+        friction = np.zeros(3)
+        return friction
             
         
             
@@ -675,7 +590,7 @@ class simu_main():
         # moment generated by body wrt CG
         moment_all = np.cross( np.array([CG-self.CP_body,0.,0.]) , force_all )
         
-        print('Cd,Cl', Cd,Cl, 'alpha', alpha*180/np.pi)
+        # print('Cd,Cl', Cd,Cl, 'alpha', alpha*180/np.pi)
         #print('')
         
         
@@ -945,7 +860,6 @@ class simu_main():
         
         
         
-        
     def rocket_coeff_nofins(self, Mach,alpha):
         # input: Mach number
         #        alpha: angle of attack[rad]
@@ -960,6 +874,7 @@ class simu_main():
         else:
             # lift coefficient slope for fin-body integrated computations
             k1 = 15.0
+            k1 = 5.8
         # END IF
         Cl = k1 * alpha 
         
@@ -981,8 +896,8 @@ class simu_main():
         Cd = self.Cd0 + Cd_bar*( np.cos(2*alpha + np.pi) +1. ) 
         
         # compressiblity correction
-        if Mach > 0.94:
-            Mach = 0.94
+        if Mach > 0.93:
+            Mach = 0.93
         # END IF
         
         Cd /= np.sqrt(1-Mach**2.)
@@ -1011,8 +926,7 @@ class simu_main():
         return Cd, Cl
         
         
-        
-        
+         
     def state2vecs_quat(self,u):
         # convert state vector u to vectors
         x = u[0:3]     # translation         :in fixed coordinate

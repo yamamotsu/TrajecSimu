@@ -1,0 +1,87 @@
+$
+$
+$  ROCKET PARAMETER DEFINITION
+$
+$ chamber dry mass: 16kg
+$ tank dry mass: 7kg
+$ valve system dry mass: 4kg
+$ airframe dry mass: 15kg
+$ total dry mass: 42kg
+$
+$ oxidizer mass: 14kg (12L * 1.189 kg/L ) or 10kg (12L * 0.8 kg/L )
+$ fuel mass: 3kg
+$ total propellant mass: 17kg
+$
+$ total wet mass: 59kg
+$
+$ parameter,value
+
+$
+$ rocket airframe parameters
+$
+rocket_height, 3.2
+rocket_diameter, 0.17
+m_dry, 32.
+m_fuel, 13.
+CG_dry, 2.2
+CG_fuel, 2.
+MOI_dry_x, 0.2007
+MOI_dry_y, 33.888
+MOI_dry_z, 33.888
+MOI_fuel_x, 0.03
+MOI_fuel_y, 1.5
+MOI_fuel_z, 1.5
+
+$
+$ rocket aerodynamic parameters
+$
+CP_body, 2.7
+$ CFD-based CP: 2.7
+Cd0, 0.6
+$aero_fin_mode,indiv
+
+$
+$ fin configuration
+$
+$fin_alpha, 0.  
+$LE_fins, 3.  
+$fin_Lroot, 0.4  
+$fin_Ltip, 0.2   
+$fin_h, 0.14     
+$fin_ang, 47.5   
+$fin_dis, 3
+
+$
+$ numerical parameters
+$
+dt, 0.0005
+t_max, 100.
+
+$              
+$ launch parameters
+$
+elev_angle, 80.
+azimuth, 135.  
+wind_direction, 90.
+wind_speed, 4.
+rail_length, 4.5
+$
+$ engine parameters
+$
+$ thrust_input_type = 
+$	'rectangle'     for constant thrust. Requires "thrust"[N], "t_MECO"[s], and "thrust_filename"
+$ 	'curve_const_t' for thrust log with constant time step. Requires "  "[s] and "thrust_filename"
+$   'time_curve'    for 
+$ 
+thrust_input_type,rectangle
+t_MECO, 10.
+thrust, 2500.
+
+$
+$ parachute parameters
+$
+t_para_delay, 1.
+Cd_para, 1.
+S_para, 0.712
+
+

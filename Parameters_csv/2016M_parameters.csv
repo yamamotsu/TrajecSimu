@@ -10,8 +10,8 @@ $
 $ rocket airframe parameters
 $
 rocket_height, 2.575
-rocket_diameter, 0.118 
-m_dry, 13.5
+rocket_diameter, 0.110
+m_dry, 10.
 m_fuel, 6.
 CG_dry, 1.767
 CG_fuel, 1.635
@@ -32,13 +32,13 @@ $aero_fin_mode,indivvvv
 $
 $ fin configuration
 $
-fin_alpha, 0.  
-LE_fins, 2.2  
-fin_Lroot, 0.18  
-fin_Ltip, 0.096   
-fin_h, 0.09     
-fin_ang, 39.5
-fin_dis, 3
+$fin_alpha, 0.  
+$LE_fins, 2.2  
+$fin_Lroot, 0.18  
+$fin_Ltip, 0.096   
+$fin_h, 0.09     
+$fin_ang, 39.5
+$fin_dis, 3
 
 $
 $ numerical parameters
@@ -54,12 +54,18 @@ azimuth, 315.
 $azimuth, 135.  
 $wind_direction, 135.
 wind_direction, 315.
-wind_speed, 9.
+wind_speed, 4.
 rail_length, 5.
 
 $
 $ engine parameters
 $
+$ thrust_input_type = 
+$	'rectangle'     for constant thrust. Requires "thrust"[N], "t_MECO"[s], and "thrust_filename"
+$ 	'curve_const_t' for thrust log with constant time step. Requires "  "[s] and "thrust_filename"
+$   'time_curve'    for 
+$ 
+thrust_input_type,rectangle
 t_MECO, 9.3
 thrust, 800.
 
