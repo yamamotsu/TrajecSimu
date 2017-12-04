@@ -25,9 +25,11 @@ myrocket.run_single(csv_filename)
 # ------------------------------------
 # run a loop for landing point distribution
 # ------------------------------------
+"""
 wind_direction_array = np.linspace(0.,360.,9)  # wind direction array
 wind_speed_array = np.linspace(1.,7., 7)       # wind speed array
 myrocket.run_loop(csv_filename, wind_direction_array, wind_speed_array)
+"""
 
 
 

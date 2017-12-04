@@ -331,9 +331,6 @@ class Rocket_simu():
                       
         # import sub-class
         from trajectory import trajec_main
-              
-        # setup parameters in the instance for post-processing
-        self.overwrite_parameters(params_df)
         
         # create an instance for a trajectry simulation
         self.trajectory = trajec_main(params_df)  # provide parameters for sub-class 
@@ -484,7 +481,7 @@ class Rocket_simu():
             
             # creat time array to find out the max values 
             time = self.trajectory.t    # extract time array
-            dt = self.dt                # time step
+            dt = self.trajectory.dt                # time step
             land_time_id = int(np.ceil(self.trajectory.landing_time/dt)) # id of time array when the rocket landed
             time = time[0:land_time_id] # array before landing: cut off useless after-landing part
             landing_time = time[-1]
@@ -501,7 +498,7 @@ class Rocket_simu():
             
             # creat time array to plot
             time = self.trajectory.t     # extract time array
-            dt = self.dt                 # time step
+            dt = self.trajectory.dt                 # time step
             land_time_id = int(np.ceil(self.trajectory.landing_time/dt)) # id of time array when the rocket landed
             time = time[0:land_time_id] # array before landing: cut off useless after-landing part
             # cut off useless info out of ODE solution array
@@ -627,9 +624,9 @@ class Rocket_simu():
         """
         
         # split arrays for each flight mode
-        t_MECO = self.t_MECO
+        t_MECO = self.trajectory.t_MECO
         t_deploy = self.trajectory.t_deploy
-        dt = self.dt
+        dt = self.trajectory.dt
         
         # ***_t: thrusted flight (before MECO)
         # ***_c: inertial flight
@@ -848,5 +845,7 @@ class Rocket_simu():
         plt.plot(x_circle, y_circle,color='r',lw=5)
         plt.show
         #plot landing location
+        
+        return None
           
         
