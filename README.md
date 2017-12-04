@@ -1,6 +1,10 @@
 # TrajecSimu
 Trajectory simulation for high-power rockets
-by Shugo Kaneko
+by shugok
+
+current version: 1.02 (12/4/2017)
+
+
 
 
 
