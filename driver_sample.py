@@ -12,7 +12,7 @@ import numpy as np
 from Rocket_simu import Rocket_simu
 
 # path and filename to a csv file
-csv_filename = 'Parameters_csv/2016m_parameters.csv'
+csv_filename = 'Parameters_csv/newmitei_parameters_C63.csv'
 
 # create an instance
 myrocket = Rocket_simu()
@@ -29,7 +29,7 @@ myrocket.run_single(csv_filename)
 wind_direction_array = np.linspace(0.,360.,9)  # wind direction array
 wind_speed_array = np.linspace(1.,7., 7)       # wind speed array
 myrocket.run_loop(csv_filename, wind_direction_array, wind_speed_array)
-"""
+#"""
 
 
 

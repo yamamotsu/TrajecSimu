@@ -8,11 +8,11 @@ Created on Sat Jul  8 23:06:17 2017
 
 import numpy as np
 from scipy.integrate import ode, odeint
-from scipy import fftpack, interpolate, integrate
-import pandas as pd
+# from scipy import fftpack, interpolate, integrate
+# import pandas as pd
 import quaternion 
 from Rocket_simu import Rocket_simu
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 class trajec_main(Rocket_simu):
     """
@@ -79,7 +79,7 @@ class trajec_main(Rocket_simu):
         print('----------------------------')
         print(' ')
         """
-        
+                        
         if self.integ == 'lsoda_odeint':
             # ---------------------------------------------
             #      use scipy.odeint
@@ -95,6 +95,10 @@ class trajec_main(Rocket_simu):
                 pass
             
         else:
+            
+            print('currently not supported. set "inter,lsoda_odeint" in csv file.')
+            
+            """
             # ---------------------------------------------
             #      use scipy.ode
             # ---------------------------------------------            
@@ -110,6 +114,8 @@ class trajec_main(Rocket_simu):
                 r.integrate(r.t+self.dt)
                 #END IF
             #END WHILE
+            
+            """
         #END IF
         
         """        
@@ -167,6 +173,7 @@ class trajec_main(Rocket_simu):
         
 
     def f_main(self,u,t):
+        
         # =======================================
         # this method is the RHS function of ODE
         #
@@ -485,8 +492,8 @@ class trajec_main(Rocket_simu):
         # T = np.array([self.thrustforce,0.,0.])
         
         # use interp1d
-        thrust = self.thrust_function(t)
-        T = np.array([thrust,0.,0.])
+        tmp = self.thrust_function(t)
+        T = np.array([tmp,0.,0.])
         
         return T
         
@@ -874,7 +881,8 @@ class trajec_main(Rocket_simu):
         else:
             # lift coefficient slope for fin-body integrated computations
             k1 = 15.0
-            k1 = 5.8
+            # k1 = 5.8
+            
         # END IF
         Cl = k1 * alpha 
         

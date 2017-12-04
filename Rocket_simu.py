@@ -239,8 +239,8 @@ class Rocket_simu():
             # rectangle thrust input (constant thrust * burn time)
             
             # setup interp1d function
-            time_array = np.array([0, self.t_MECO])  
-            thrust = np.ones(2) * self.thrustforce
+            self.time_array = np.array([0, self.t_MECO])  
+            self.thrust_array = np.ones(2) * self.thrustforce
                 
         else:
             # input thrust curve from csv file
@@ -257,41 +257,34 @@ class Rocket_simu():
                 thrust_raw = input_raw 
                 
                 # cut off info where thrust is less that 1% of T_max
-                thrust = thrust_raw[ thrust_raw >= 0.01*np.max(thrust) ]
+                self.thrust_array = thrust_raw[ thrust_raw >= 0.01*np.max(thrust_raw) ]
                 # time array
-                time_array = np.arange(0., len(thrust)*self.thrust_dt, self.thrust_dt)
+                self.time_array = np.arange(0., len(self.thrust_array)*self.thrust_dt, self.thrust_dt)
                 
             elif self.thrust_input_type == 'time_curve': 
                 # time array
-                time_array = input_raw[:,0]
+                self.time_array = input_raw[:,0]
                 # thrust array
-                thrust = input_raw[:,1]
+                self.thrust_array = input_raw[:,1]
             # END IF
             
         # maximum thrust
-        T_max = np.max(thrust)
+        self.Thrust_max = np.max(self.thrust_array)
         # total impulse
-        I_total = integrate.trapz(thrust, time_array)
+        self.Impulse_total = integrate.trapz(self.thrust_array, self.time_array)
         # averaged thrust
-        T_avg = I_total / time_array[-1]
+        self.Thrust_avg = self.Impulse_total / self.time_array[-1]
         # MECO time
-        self.t_MECO = time_array[-1]
+        self.t_MECO = self.time_array[-1]
         
-        print('--------------------')
-        print(' THRUST DATA ECHO')
-        print(' total impulse: ', I_total, '[N.s]')
-        print(' burn time: ', self.t_MECO, '[s]')
-        print(' max. thrust: ', T_max, '[N]')
-        print(' average thrust: ', T_avg, '[N]')
-        print('--------------------')
-            
+        
         if self.thrust_input_type == 'curve_const_t': 
             # ------------------
             # noise cancellation
             # ------------------
             # FFT (fast fourier transformation)
-            tf = fftpack.fft(thrust)
-            freq = fftpack.fftfreq(len(thrust), self.thrust_dt)
+            tf = fftpack.fft(self.thrust_array)
+            freq = fftpack.fftfreq(len(self.thrust_array), self.thrust_dt)
             
             # filtering 
             fs = 5.                         # cut off frequency [Hz]
@@ -299,21 +292,11 @@ class Rocket_simu():
             tf2[(freq > fs)] = 0
             
             # inverse FFT
-            thrust = np.real(fftpack.ifft(tf2))
+            self.thrust_array = np.real(fftpack.ifft(tf2))
         # END IF
             
         # set interp1d function
-        self.thrust_function = interpolate.interp1d(time_array, thrust)
-        
-        """
-        # plot filtered thrust curve
-        plt.plot(time_array, thrust, color='red')
-        plt.title('Thrust curve')
-        plt.xlabel('t [s]')
-        plt.ylabel('thrust [N]')
-        plt.grid()
-        plt.show ()
-        #"""
+        self.thrust_function = interpolate.interp1d(self.time_array, self.thrust_array)
         
         
     """
@@ -505,6 +488,9 @@ class Rocket_simu():
             self.trajectory.solution = self.trajectory.solution[0:len(time),:]
             
             # *** plot and show all results ***
+            # thrust data echo
+            self.echo_thrust()
+            
             # returns landing location
             self.show_landing_location()
             # returns max values
@@ -522,6 +508,9 @@ class Rocket_simu():
             
             # plot dynamic pressure history
             
+            # show all plots
+            plt.show()
+            
             return None
                 
         else:
@@ -529,6 +518,31 @@ class Rocket_simu():
             print('error: process_type must be "location" or "max" or "all". ')
         #END IF
         
+    def echo_thrust(self):
+        # =============================================
+        # this method plots thrust curve along with engine properties
+        # =============================================
+        
+        # engine properties
+        print('--------------------')
+        print(' THRUST DATA ECHO')
+        print(' total impulse: ', self.trajectory.Impulse_total, '[N.s]')
+        print(' burn time: ', self.trajectory.t_MECO, '[s]')
+        print(' max. thrust: ', self.trajectory.Thrust_max, '[N]')
+        print(' average thrust: ', self.trajectory.Thrust_avg, '[N]')
+        print('--------------------')
+            
+
+        # plot filtered thrust curve
+        fig = plt.figure(1)
+        plt.plot(self.trajectory.time_array, self.trajectory.thrust_array, color='red')
+        plt.title('Thrust curve')
+        plt.xlabel('t [s]')
+        plt.ylabel('thrust [N]')
+        plt.grid()
+        #plt.show () 
+        
+        return None
         
     def show_landing_location(self):
         # =============================================
@@ -643,7 +657,7 @@ class Rocket_simu():
             zloc_t, zloc_c = np.split(zloc,[int(np.ceil(t_MECO/dt))])
             
             # create plot
-        fig = plt.figure()
+        fig = plt.figure(2)
         ax = Axes3D(fig)
         
         # plot powered-phase trajectory
@@ -667,7 +681,7 @@ class Rocket_simu():
         ax.set_title('Trajectory')
         ax.legend()
         # ax.set_aspect('equal')
-        plt.show()
+        #.show()
         
         return None
     
@@ -692,7 +706,7 @@ class Rocket_simu():
         """
         
         # create plot
-        plt.figure()
+        plt.figure(3)
         # plot x history
         plt.plot(time,xloc,lw=1.5,label='x')
         # plot y history
@@ -704,7 +718,7 @@ class Rocket_simu():
         plt.xlabel('t [s]')
         plt.ylabel('xyz [m]')
         plt.grid()
-        plt.show   
+        #plt.show   
         
         return None
         
@@ -728,7 +742,7 @@ class Rocket_simu():
         # END IF
         """
         
-        plt.figure()
+        plt.figure(4)
         # u history
         plt.plot(time,u,lw=1.5,label='Vx')
         # v history
@@ -742,7 +756,7 @@ class Rocket_simu():
         plt.xlabel('t [s]')
         plt.ylabel('v [m/s]')
         plt.grid()
-        plt.show  
+        #plt.show  
         
         return None
         
@@ -765,7 +779,7 @@ class Rocket_simu():
         # END IF
         """
         
-        plt.figure()
+        plt.figure(5)
         # p history 
         plt.plot(time,p,lw=1.5,label='omega_x')
         # q history
@@ -778,7 +792,7 @@ class Rocket_simu():
         plt.xlabel('t [s]')
         plt.ylabel('omega [rad/s]')
         plt.grid()
-        plt.show 
+        #plt.show 
         
         return None
     
@@ -792,13 +806,13 @@ class Rocket_simu():
         R = 2500.
         center = np.array([1768., -1768.])
         theta = np.linspace(0,2*np.pi,100)
-        x_circle = R * np.cos(theta) + 1768.
-        y_circle = R * np.sin(theta) - 1768.
+        x_circle = R * np.cos(theta) + center[0]
+        y_circle = R * np.sin(theta) + center[1]
         
         # ----------------------------
         #    ballistic
         # ----------------------------
-        plt.figure()
+        plt.figure(6)
         # loop over wind speed
         for i in range(n_windspeed):
             # plot ballistic landing distribution
@@ -818,13 +832,13 @@ class Rocket_simu():
         plt.axis('equal')
         plt.plot(0,0,color='r',marker='*',markersize=12)
         plt.plot(x_circle, y_circle,color='r',lw=5)
-        plt.show
+        #plt.show()
         
         
         # ----------------------------
         #    parachute
         # ----------------------------
-        plt.figure()
+        plt.figure(7)
         # loop over wind speed
         for i in range(n_windspeed):
             # plot parachute landing distribution
@@ -843,8 +857,7 @@ class Rocket_simu():
         plt.axis('equal')
         plt.plot(0,0,color='r',marker='*',markersize=12)
         plt.plot(x_circle, y_circle,color='r',lw=5)
-        plt.show
-        #plot landing location
+        # plt.show
         
         return None
           
