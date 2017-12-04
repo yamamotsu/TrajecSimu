@@ -69,8 +69,8 @@ $
 $ engine parameters
 $
 $ thrust_input_type = 
-$	'rectangle'     for constant thrust. Requires "thrust"[N], "t_MECO"[s], and "thrust_filename"
-$ 	'curve_const_t' for thrust log with constant time step. Requires "  "[s] and "thrust_filename"
+$	'rectangle'     for constant thrust. Requires "thrust"[N], "t_MECO"[s]
+$ 	'curve_const_t' for thrust log with constant time step. Requires "thrust_dt"[s] and "thrust_filename"
 $   'time_curve'    for 
 $ 
 thrust_input_type,rectangle

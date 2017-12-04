@@ -27,7 +27,7 @@ $
 $ rocket aerodynamic parameters
 $
 CP_body, 0.181
-Cd0, 0.5
+$ Cd0, 0.5
 $aero_fin_mode,indiv
 
 $
@@ -58,7 +58,7 @@ $ t_deploy = 4.87 for both C6-3 and B6-4
 t_deploy, 4.87
 
 t_para_delay, 1.
-Cd_para, 0.8
+$ Cd_para, 0.8
 $ for 85g rocket, S > 0.068 is required for <5m/s fall speed
 S_para, 0.0921
 

@@ -70,10 +70,11 @@ class Rocket_simu():
                             'Cwind'          : 1./7.4,  # wind model power coefficient 
     
                             # -----------------------------
-                            # rocket airframe parameters
+                            # rocket aerodynamic parameters
                             # ----------------------------- 
                             'aero_fin_mode'    : 'integ',  # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
-                
+                            'Cd0'              : 0.6,      #  drag coefficient at Mach 0.1, AoA = 0deg
+
                             # -----------------------------
                             # rocket engine parameters
                             # ----------------------------- 
@@ -86,8 +87,8 @@ class Rocket_simu():
                             # -----------------------------
                             't_deploy' : 1000.,   # parachute deployment time from ignition
                             't_para_delay': 1000.,   # parachute deployment time from apogee detection
-                            #'Cd_para': 1.,       # parachute drag coefficient
-                            #'S_para': 0.64,      # parachute area [m^2]
+                            'Cd_para': 1.,       # parachute drag coefficient
+                            'S_para': 0.5,      # parachute area [m^2]
                             } 
 
         return None

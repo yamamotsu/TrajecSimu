@@ -11,7 +11,7 @@ Created on Sun Dec  3 17:33:18 2017
 import numpy as np
 from Rocket_simu import Rocket_simu
 
-# path and filename to a csv file
+# define path and filename of a csv file
 csv_filename = 'Parameters_csv/newmitei_parameters_C63.csv'
 
 # create an instance
