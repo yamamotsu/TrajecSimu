@@ -33,7 +33,7 @@ class trajec_main(Rocket_simu):
         # INPUT: params_df = parameters contains all parameters needed
         # =============================================
         # setup parameters in the instance by calling superclasses method
-        super().__init__()
+        self.get_default()   
         self.overwrite_parameters(params_df)   
 
         return None     

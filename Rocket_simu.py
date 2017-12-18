@@ -30,7 +30,7 @@ class Rocket_simu():
     ----------------------------------------------------
     """
     
-    def __init__(self):
+    def __init__(self, csv_filename):
         # =============================================
         # This method is called when an instance is created
         # =============================================
@@ -38,8 +38,11 @@ class Rocket_simu():
         # initialize parameters by setting default values
         self.get_default()   
         
+        # read csv file that contains initial parameters
+        self.params_df = pd.read_csv(csv_filename, comment='$', names=('parameter', 'value') ) # '$' denotes commet out  
+        
         # initialize a dict for result
-        # self.res = {}
+        self.res = {}
 
         return None      
         
@@ -99,7 +102,7 @@ class Rocket_simu():
         return None
             
     
-    def overwrite_parameters(self, params_df={}):
+    def overwrite_parameters(self, params_df_userdef={}):
         # =============================================
         # This method updates default parameters with user-defined parameters. 
         # User-defined parameters should be provided in pandas dataframe
@@ -108,7 +111,7 @@ class Rocket_simu():
         # =============================================
 
         # update param_dict (convert Dataframe -> array -> dict)
-        self.params_dict.update( dict( params_df.as_matrix() ) ) 
+        self.params_dict.update( dict( params_df_userdef.as_matrix() ) ) 
 
         # set instance variables from params_dict
         # -----------------------------
@@ -356,7 +359,7 @@ class Rocket_simu():
     ----------------------------------------------------
     """
     
-    def run(self, params_df):
+    def run(self):
         # =============================================
         # A method for a single trajectory simulation
         #
@@ -367,25 +370,29 @@ class Rocket_simu():
         from trajectory import trajec_main
         
         # create an instance for a trajectry simulation
-        self.trajectory = trajec_main(params_df)  # provide parameters for sub-class 
+        self.trajectory = trajec_main(self.params_df)  # provide parameters for sub-class 
         
-        print('----------------------------')
+        #"""
+        print('============================')
         print('  Completed Parameters Setup')
-        print('----------------------------')
+        print('============================')
         print(' ')
+        #"""
         
         # run ODE integration
         self.trajectory.ODE_main()
                     
         # quit
-        print('----------------------------')
-        print('  Quit simulation')
-        print('----------------------------')
+        #"""
+        print('============================')
+        print('  Quit ODE_main')
+        print('============================')
         print(' ')
+        #"""
 
         return None
     
-    def run_single(self, csv_filename):
+    def run_single(self):
         # =============================================
         # A method for a single trajectory simulation and post-processing
         #
@@ -393,17 +400,17 @@ class Rocket_simu():
         # =============================================
            
         # read a csv file and put parameters into pandas dataframe 
-        params_df = pd.read_csv(csv_filename, comment='$', names=('parameter', 'value') ) # '$' denotes commet out  
+        # params_df = pd.read_csv(csv_filename, comment='$', names=('parameter', 'value') ) # '$' denotes commet out  
         
         # run a main computation
-        self.run(params_df)
+        self.run()
         
         # post-process
         self.postprocess('all')
         
         return None
     
-    def run_loop(self, csv_filename, wind_direction_array = np.linspace(0.,360.,9), wind_speed_array = np.linspace(1.,7.,7)):
+    def run_loop(self, wind_direction_array = np.linspace(0.,360.,9), wind_speed_array = np.linspace(1.,7.,7)):
         # =============================================
         # A method for running loop to get landing distribution
         #
@@ -413,7 +420,8 @@ class Rocket_simu():
         # =============================================
         
         # read a csv file and put parameters into pandas dataframe 
-        params_df = pd.read_csv(csv_filename, comment='$', names=('parameter', 'value') ) # '$' denotes commet out  
+        # params_df = pd.read_csv(csv_filename, comment='$', names=('parameter', 'value') ) # '$' denotes commet out  
+        params_df = self.params_df
         
         # initialize arrays for landing location
         self.loc_bal = np.zeros((len(wind_speed_array), len(wind_direction_array), 2) )  # for ballistic
@@ -446,10 +454,11 @@ class Rocket_simu():
                 params_df.loc[params_df.parameter == 't_deploy', 'value'] = 1.e7
                 
                 # run a single trajectory simulation
-                self.run(params_df)
+                self.run()
                 
-                # post-process
-                self.loc_bal[i_speed,i_angle,:] = self.postprocess('location')
+                # post-process and get landing location
+                self.postprocess('location')
+                self.loc_bal[i_speed,i_angle,:] = self.res['landing_loc']
                 
                 # ---------------------------------
                 # landing point for parachute fall
@@ -459,9 +468,11 @@ class Rocket_simu():
                 params_df.loc[params_df.parameter == 't_deploy', 'value'] = t_deploy_original
                 
                 # run main computation
-                self.run(params_df)
-                # post-process
-                self.loc_para[i_speed,i_angle,:] = self.postprocess('location')
+                self.run()
+
+                # post-process and get landing location
+                self.postprocess('location')
+                self.loc_para[i_speed,i_angle,:] = self.res['landing_loc']
                
                 # loop count
                 i_angle += 1
@@ -474,6 +485,14 @@ class Rocket_simu():
         # close wind direction loop
         self.loc_para[:,-1,:] = self.loc_para[:,0,:]
         self.loc_bal[:,-1,:] = self.loc_bal[:,0,:]
+        
+        # record landing distribution
+        tmp_dict = {'wind_directions': wind_direction_array,
+                        'wind_speeds': wind_speed_array,
+                        'loc_parachute': self.loc_para,
+                        'loc_ballistic': self.loc_bal,
+                }
+        self.res.update({'landing_distribution':tmp_dict})
         
         self.plot_dist(wind_speed_array)
         
@@ -496,40 +515,33 @@ class Rocket_simu():
         #                    'maxval'     : returns max values of interest along with the landing location
         #                    'all'        : plot all variable histories along with max values and landing location.
         # =============================================
-        print('----------------------------')
-        print('  Post-processing')
-        print('----------------------------')
-        print(' ')
-        
-        x_loc = 0.
-        y_loc = 0.
        
         if process_type == 'location':
-            # *** return landing location  ***
-            x_loc, y_loc = self.show_landing_location()
-            
-            return x_loc, y_loc
+            # *** get landing location  ***
+            self.get_landing_location()
            
         elif process_type == 'maxval':
             # *** return max M, q, speed, altitude, flight time, and landing location  ***
             
-            # creat time array to find out the max values 
+            # create time array to find out the max values 
             time = self.trajectory.t    # extract time array
             dt = self.trajectory.dt                # time step
             land_time_id = int(np.ceil(self.trajectory.landing_time/dt)) # id of time array when the rocket landed
             time = time[0:land_time_id] # array before landing: cut off useless after-landing part
-            landing_time = time[-1]
+            # landing_time = time[-1]
             
-            # returns landing location
-            x_loc, y_loc = self.show_landing_location() 
-            # returns max values
-            self.show_max_values(time)
-            
-            return x_loc, y_loc, landing_time
+            # get landing location
+            self.get_landing_location() 
+            # get max values
+            self.get_flight_detail(time)
             
         elif process_type == 'all':
             # *** plot all variable histories along with max values and landing location ***
-            
+            print('============================')
+            print('  Post-processing')
+            print('============================')
+            print(' ')
+        
             # creat time array to plot
             time = self.trajectory.t     # extract time array
             dt = self.trajectory.dt                 # time step
@@ -542,10 +554,10 @@ class Rocket_simu():
             # thrust data echo
             self.echo_thrust()
             
-            # returns landing location
-            self.show_landing_location()
-            # returns max values
-            self.show_max_values(time)
+            # get landing location
+            self.get_landing_location(True)
+            # get flight detail
+            self.get_flight_detail(time,True)
             
             # plot trajectory
             self.visualize_trajectory(time)
@@ -561,13 +573,13 @@ class Rocket_simu():
             
             # show all plots
             plt.show()
-            
-            return None
                 
         else:
             # if input variable "process_type" is incorrect, show error message
             print('error: process_type must be "location" or "max" or "all". ')
         #END IF
+        
+        return None
         
     def echo_thrust(self):
         # =============================================
@@ -604,26 +616,33 @@ class Rocket_simu():
         
         return None
         
-    def show_landing_location(self):
+    def get_landing_location(self, show=False):
         # =============================================
-        # this method shows the location that the rocket has landed
+        # this method gets the location that the rocket has landed
         # =============================================
         
         # landing point coordinate is is stored at the end of array "history"
         xloc = self.trajectory.solution[-1,0]
         yloc = self.trajectory.solution[-1,1]
         zloc = self.trajectory.solution[-1,2]
-        print('----------------------------')
-        print('landing location:')
-        print('[x,y,z] = ', xloc, yloc, zloc)
-        print('----------------------------')
+        
+        # record landing location in dict
+        self.res.update( { 'landing_loc' : np.array([xloc, yloc]) } )
+        
+        if show:
+            # show result
+            print('----------------------------')
+            print('landing location:')
+            print('[x,y,z] = ', xloc, yloc, zloc)
+            print('----------------------------')
+        # END IF
         
         return xloc, yloc
         
         
-    def show_max_values(self,time):
+    def get_flight_detail(self,time, show=False):
         # =============================================
-        # this method shows max values of M, q, speed, altitude
+        # this method gets flight detail (max values of M, q, speed, altitude)
         # =============================================
         
         # array of rho, a histories: use standard air
@@ -639,40 +658,53 @@ class Rocket_simu():
         
         # array of speed history
         speed = np.linalg.norm(self.trajectory.solution[:,3:6],axis=1) # provide velocity=u[3:6]
-        
         # index of max. Mach number
         M_max = np.argmax(speed / a)
-        
         # index of max Q
         Q_max = np.argmax(0.5 * rho * speed**2.)
-        
         # index of max. speed
         v_max = np.argmax(speed)
-        
         # index of max. altitude: max. of z
         h_max = np.argmax(self.trajectory.solution[:,2])
-        
         # get wind speed at Max_Q
         wind_vec = self.trajectory.wind(self.trajectory.solution[Q_max,2]*4.)  # provide altitude=u[2]
         wind_speed = np.linalg.norm(wind_vec)
-
-        # flight time: the last value of time array
-        print('----------------------------')
-        print(' Max. Mach number: ',"{0:.3f}".format(speed[M_max]/a[M_max]),' at t=',"{0:.2f}".format(time[M_max]),'[s]')
-        print(' Max. Q: ', "{0:6.2e}".format(0.5*rho[Q_max]*speed[Q_max]**2.), '[Pa] at t=',"{0:.2f}".format(time[Q_max]),'[s]')
-        print(' Max. speed: ', "{0:.1f}".format(speed[v_max]),'[m/s] at t=',"{0:.2f}".format(time[v_max]),'[s]')
-        print(' Max. altitude: ', "{0:.1f}".format(self.trajectory.solution[h_max,2]), '[m] at t=',"{0:.2f}".format(time[h_max]),'[s]')
-        print(' total flight time: ', "{0:.2f}".format(self.trajectory.landing_time),'[s]')
-        print('----------------------------')
         
-        # output flight condition at Max.Q
-        print(' Flight conditions at Max-Q.')
-        print(' free-stream pressure: ', "{0:6.2e}".format(p[Q_max]) ,'[Pa]')
-        print(' free-stream temperature: ', "{0:.1f}".format(T[Q_max]) ,'[T]')
-        print(' free-stream Mach: ', "{0:.3f}".format(speed[Q_max]/a[Q_max]) )
-        print(' Wind speed: ',  "{0:.2f}".format(wind_speed),'[m/s]')
-        print(' Angle of attack for gust rate 2: ', "{0:.1f}".format(np.arctan( wind_speed/speed[Q_max])*180./np.pi ),'[deg]')
-        print('----------------------------')  
+        # record flight detail
+        maxq_dict = {'max_Q' : 0.5*rho[Q_max]*speed[Q_max]**2.,  # max. dynamic pressure
+                     'time'  : time[Q_max],                      # time
+                     'free_stream_pressure': p[Q_max],
+                     'free_stream_temperature' : T[Q_max], 
+                     'free_stream_Mach: ' : speed[Q_max]/a[Q_max],
+                     'wind_speed: ' : wind_speed,
+                     'AoA_for_gustrate2' : np.arctan( wind_speed/speed[Q_max])*180./np.pi,
+                     }
+        tmp_dict = {'max_Mach' : np.array([speed[M_max]/a[M_max], time[M_max] ])  ,          # [max. Maxh number, time]
+                    'max_speed': np.array([speed[v_max], time[v_max]]),                      # max. speed
+                    'max_altitude'  : np.array([self.trajectory.solution[h_max,2], time[h_max]]), # max. altitude
+                    'total_flight_time': self.trajectory.landing_time,                       # total flight time
+                    'max_Q_all'  : maxq_dict,
+                    }
+        self.res.update(tmp_dict)
+        
+        if show:
+            # show results
+            print('----------------------------')
+            print(' Max. Mach number: ',"{0:.3f}".format(speed[M_max]/a[M_max]),' at t=',"{0:.2f}".format(time[M_max]),'[s]')
+            print(' Max. Q: ', "{0:6.2e}".format(0.5*rho[Q_max]*speed[Q_max]**2.), '[Pa] at t=',"{0:.2f}".format(time[Q_max]),'[s]')
+            print(' Max. speed: ', "{0:.1f}".format(speed[v_max]),'[m/s] at t=',"{0:.2f}".format(time[v_max]),'[s]')
+            print(' Max. altitude: ', "{0:.1f}".format(self.trajectory.solution[h_max,2]), '[m] at t=',"{0:.2f}".format(time[h_max]),'[s]')
+            print(' total flight time: ', "{0:.2f}".format(self.trajectory.landing_time),'[s]')
+            print('----------------------------')
+            
+            # output flight condition at Max.Q
+            print(' Flight conditions at Max-Q.')
+            print(' free-stream pressure: ', "{0:6.2e}".format(p[Q_max]) ,'[Pa]')
+            print(' free-stream temperature: ', "{0:.1f}".format(T[Q_max]) ,'[T]')
+            print(' free-stream Mach: ', "{0:.3f}".format(speed[Q_max]/a[Q_max]) )
+            print(' Wind speed: ',  "{0:.2f}".format(wind_speed),'[m/s]')
+            print(' Angle of attack for gust rate 2: ', "{0:.1f}".format(np.arctan( wind_speed/speed[Q_max])*180./np.pi ),'[deg]')
+            print('----------------------------')  
 
         return None  
         
