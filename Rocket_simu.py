@@ -11,7 +11,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from scipy import fftpack, interpolate, integrate
+from scipy import fftpack, interpolate, integrate, optimize
 import pandas as pd
 
 # class
@@ -36,7 +36,10 @@ class Rocket_simu():
         # =============================================
         
         # initialize parameters by setting default values
-        self.get_default()    
+        self.get_default()   
+        
+        # initialize a dict for result
+        # self.res = {}
 
         return None      
         
@@ -80,7 +83,9 @@ class Rocket_simu():
                             # ----------------------------- 
                             #'t_MECO' : 9.3,   # Main Engine Cut Off (MECO) time
                             #'thrust' : 800.,  # thrust (const.)
-                            'thrust_input_type' : 'curve_const_t',
+                            'thrust_input_type' : 'curve_const_t',   # thrust input csv file type
+                            'curve_fitting'     : True,              # True if curvefitting
+                            'fitting_order'     : 15,                # order of polynomial
     
                             # -----------------------------       
                             # parachute parameters
@@ -103,7 +108,6 @@ class Rocket_simu():
         # =============================================
 
         # update param_dict (convert Dataframe -> array -> dict)
-        
         self.params_dict.update( dict( params_df.as_matrix() ) ) 
 
         # set instance variables from params_dict
@@ -196,17 +200,21 @@ class Rocket_simu():
                 self.t_MECO = float( self.params_dict['t_MECO'] )
                 self.thrustforce = float( self.params_dict['thrust'] )
                 
-            elif self.thrust_input_type == 'curve_const_t':
-                # thrust curve with constant time step (csv of 1 raw)
-                self.thrust_dt = float( self.params_dict['thrust_dt'] )
-                self.thrust_filename = self.params_dict['thrust_filename']
+            else:
+                if self.thrust_input_type == 'curve_const_t':
+                    # thrust curve with constant time step (csv of 1 raw)
+                    self.thrust_dt = float( self.params_dict['thrust_dt'] )
+                    self.thrust_filename = self.params_dict['thrust_filename']
                 
-            elif self.thrust_input_type == 'time_curve':
-                # time and thrust log is given in csv
-                self.thrust_filename = self.params_dict['thrust_filename']   
+                elif self.thrust_input_type == 'time_curve':
+                    # time and thrust log is given in csv
+                    self.thrust_filename = self.params_dict['thrust_filename']  
+                # END IF
+                self.curve_fitting = self.params_dict['curve_fitting']
+                self.fitting_order = self.params_dict['fitting_order']
             # END IF
-            
-            # setup thrust interp1d function
+
+            # setup thrust 
             self.setup_thrust()
             
         except:
@@ -230,6 +238,12 @@ class Rocket_simu():
         # print(self.params_all.items(),'\n')  
 
         return None   
+    
+    """
+    ----------------------------------------------------
+        Method for thrust properties setup          
+    ----------------------------------------------------
+    """
     
     def setup_thrust(self):
         # =============================================
@@ -255,9 +269,10 @@ class Rocket_simu():
             
             if self.thrust_input_type == 'curve_const_t': 
                 # raw thrust array
-                thrust_raw = input_raw 
+                thrust_raw = input_raw
                 
                 # cut off info where thrust is less that 1% of T_max
+                
                 self.thrust_array = thrust_raw[ thrust_raw >= 0.01*np.max(thrust_raw) ]
                 # time array
                 self.time_array = np.arange(0., len(self.thrust_array)*self.thrust_dt, self.thrust_dt)
@@ -268,7 +283,10 @@ class Rocket_simu():
                 # thrust array
                 self.thrust_array = input_raw[:,1]
             # END IF
-            
+              
+        # -----------------------
+        #   get raw engine property
+        # -----------------------
         # maximum thrust
         self.Thrust_max = np.max(self.thrust_array)
         # total impulse
@@ -279,25 +297,57 @@ class Rocket_simu():
         self.t_MECO = self.time_array[-1]
         
         
-        if self.thrust_input_type == 'curve_const_t': 
+        if self.thrust_input_type == 'rectangle':
+            # set 1d interpolation function for rectangle thrust
+            self.thrust_function = interpolate.interp1d(self.time_array, self.thrust_array)
+            
+        else:
             # ------------------
             # noise cancellation
             # ------------------
-            # FFT (fast fourier transformation)
-            tf = fftpack.fft(self.thrust_array)
-            freq = fftpack.fftfreq(len(self.thrust_array), self.thrust_dt)
+            if self.thrust_input_type == 'curve_const_t': 
+                
+                # FFT (fast fourier transformation)
+                tf = fftpack.fft(self.thrust_array)
+                freq = fftpack.fftfreq(len(self.thrust_array), self.thrust_dt)
+                
+                # filtering 
+                fs = 5.                         # cut off frequency [Hz]
+                tf2 = np.copy(tf)
+                tf2[(freq > fs)] = 0
+                
+                # inverse FFT
+                self.thrust_array = np.real(fftpack.ifft(tf2))
+            # END IF
             
-            # filtering 
-            fs = 5.                         # cut off frequency [Hz]
-            tf2 = np.copy(tf)
-            tf2[(freq > fs)] = 0
             
-            # inverse FFT
-            self.thrust_array = np.real(fftpack.ifft(tf2))
+            # -------------------
+            #   represent raw thrust carve by "curve fitting" or "1d interpolation"
+            # -------------------
+            if self.curve_fitting: 
+                # curve fitting 
+                n_fit = self.fitting_order  # order of fitting
+                a_fit = np.polyfit(self.time_array, self.thrust_array, n_fit)
+            
+                # define polynomial that returns thrust for a given time
+                self.thrust_function = np.poly1d(a_fit)
+                
+                # total impulse for fitting function
+                thrust_poly = self.thrust_function(self.time_array)   # polynomially fitted thrust curve
+                thrust_poly[thrust_poly<0.] = 0.                      # overwrite negative value with 0
+                Impulse_total_poly = integrate.trapz(thrust_poly, self.time_array)
+                # error of total impulse [%]
+                self.It_poly_error = abs(Impulse_total_poly - self.Impulse_total) / self.Impulse_total * 100.
+                
+            else:
+                # 1d interpolation
+                self.thrust_function = interpolate.interp1d(self.time_array, self.thrust_array)
+            
         # END IF
             
+        
         # set interp1d function
-        self.thrust_function = interpolate.interp1d(self.time_array, self.thrust_array)
+        
         
         
     """
@@ -527,7 +577,10 @@ class Rocket_simu():
         # engine properties
         print('--------------------')
         print(' THRUST DATA ECHO')
-        print(' total impulse: ', self.trajectory.Impulse_total, '[N.s]')
+        print(' total impulse (raw): ', self.trajectory.Impulse_total, '[N.s]')
+        if self.trajectory.curve_fitting:
+            print('       error due to poly. fit: ', self.trajectory.It_poly_error, ' [%]')
+        # END IF
         print(' burn time: ', self.trajectory.t_MECO, '[s]')
         print(' max. thrust: ', self.trajectory.Thrust_max, '[N]')
         print(' average thrust: ', self.trajectory.Thrust_avg, '[N]')
@@ -536,11 +589,17 @@ class Rocket_simu():
 
         # plot filtered thrust curve
         fig = plt.figure(1)
-        plt.plot(self.trajectory.time_array, self.trajectory.thrust_array, color='red')
+        plt.plot(self.trajectory.time_array, self.trajectory.thrust_array, color='red', label='raw')
+        if self.trajectory.curve_fitting:
+            thrust_used = self.trajectory.thrust_function(self.trajectory.time_array)
+            thrust_used[thrust_used<0.] = 0.
+            plt.plot(self.trajectory.time_array, thrust_used, lw = 3, label='fitted')
+        # END IF
         plt.title('Thrust curve')
         plt.xlabel('t [s]')
         plt.ylabel('thrust [N]')
         plt.grid()
+        plt.legend()
         #plt.show () 
         
         return None

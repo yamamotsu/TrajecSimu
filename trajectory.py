@@ -8,7 +8,7 @@ Created on Sat Jul  8 23:06:17 2017
 
 import numpy as np
 from scipy.integrate import ode, odeint
-# from scipy import fftpack, interpolate, integrate
+from scipy import fftpack, interpolate, integrate, optimize
 # import pandas as pd
 import quaternion 
 from Rocket_simu import Rocket_simu
@@ -493,6 +493,10 @@ class trajec_main(Rocket_simu):
         
         # use interp1d
         tmp = self.thrust_function(t)
+        if tmp < 0:
+            # if thrust is nagative, which might happen because of curve fitting, overwrite with 0
+            tmp = 0.
+            
         T = np.array([tmp,0.,0.])
         
         return T

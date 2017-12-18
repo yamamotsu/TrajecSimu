@@ -5,32 +5,36 @@ $
 $ chamber dry mass: 16kg
 $ tank dry mass: 7kg
 $ valve system dry mass: 4kg
-$ airframe dry mass: 15kg
-$ total dry mass: 42kg
+$ airframe dry mass: 20kg
+$ --------------------
+$ total dry mass: 47kg
+$ --------------------
+$ oxidizer mass: 20kg density: 1.189 kg/L or 0.8 kg/L
+$ fuel mass: 5kg
+$ --------------------
+$ total propellant mass: 25kg
+$ --------------------
 $
-$ oxidizer mass: 14kg (12L * 1.189 kg/L ) or 10kg (12L * 0.8 kg/L )
-$ fuel mass: 3kg
-$ total propellant mass: 17kg
-$
-$ total wet mass: 59kg
-$
+$ --------------------
+$ total lift-off mass: 72kg
+$ --------------------
 $ parameter,value
 
 $
 $ rocket airframe parameters
 $
-rocket_height, 3.2
+rocket_height, 3.5
 rocket_diameter, 0.17
-m_dry, 32.
-m_fuel, 13.
+m_dry, 47.
+m_fuel, 25.
 CG_dry, 2.2
 CG_fuel, 2.
-MOI_dry_x, 0.2007
-MOI_dry_y, 33.888
-MOI_dry_z, 33.888
-MOI_fuel_x, 0.03
-MOI_fuel_y, 1.5
-MOI_fuel_z, 1.5
+MOI_dry_x, 0.5007
+MOI_dry_y, 50.888
+MOI_dry_z, 50.888
+MOI_fuel_x, 0.1
+MOI_fuel_y, 3.
+MOI_fuel_z, 3.
 
 $
 $ rocket aerodynamic parameters
@@ -54,8 +58,8 @@ $fin_dis, 3
 $
 $ numerical parameters
 $
-dt, 0.0005
-t_max, 100.
+dt, 0.05
+t_max, 1000.
 
 $              
 $ launch parameters
@@ -64,7 +68,7 @@ elev_angle, 80.
 azimuth, 135.  
 wind_direction, 90.
 wind_speed, 4.
-rail_length, 4.5
+rail_length, 10.
 $
 $ engine parameters
 $
@@ -73,9 +77,9 @@ $	'rectangle'     for constant thrust. Requires "thrust"[N], "t_MECO"[s]
 $ 	'curve_const_t' for thrust log with constant time step. Requires "thrust_dt"[s] and "thrust_filename"
 $   'time_curve'    for 
 $ 
-thrust_input_type,rectangle
-t_MECO, 10.
-thrust, 2500.
+thrust_input_type,curve_const_t
+thrust_dt, 0.001
+thrust_filename,umich_thrust.csv
 
 $
 $ parachute parameters

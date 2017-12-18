@@ -1,0 +1,62 @@
+$
+$
+$  ROCKET PARAMETER DEFINITION
+$
+$
+$
+$ parameter,value
+
+$
+$ rocket airframe parameters
+$
+rocket_height, 2.035
+rocket_diameter, 0.13
+m_dry, 15.5
+m_fuel, 0.7
+CG_dry, 1.
+CG_fuel, 1.
+MOI_dry_x, 0.040558193
+MOI_dry_y, 1.186494473
+MOI_dry_z, 1.186494473
+MOI_fuel_x, 0.
+MOI_fuel_y, 0.025627211
+MOI_fuel_z, 0.025627211
+
+$
+$ rocket aerodynamic parameters
+$
+CP_body, 1.3
+Cd0, 0.6
+$aero_fin_mode,indiv
+
+$
+$ numerical parameters
+$
+dt, 0.0002
+t_max, 100.
+
+$              
+$ launch parameters
+$
+elev_angle, 88.
+azimuth, 135.  
+wind_direction, 135.
+wind_speed, 3.
+rail_length, 5.
+
+$
+$ engine parameters
+$
+thrust_input_type,time_curve
+thrust_filename,2017_12_09_NTK360K_500OC.csv
+$ thrust_dt, 0.0005
+
+$
+$ parachute parameters
+$
+t_para_delay, 1.
+$ Cd_para, 0.8
+S_para, 0.0921
+
+
+

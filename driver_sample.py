@@ -12,7 +12,10 @@ import numpy as np
 from Rocket_simu import Rocket_simu
 
 # define path and filename of a csv file
-csv_filename = 'Parameters_csv/newmitei_parameters_C63.csv'
+# csv_filename = 'Parameters_csv/2018izu/relenza_ntk.csv'
+# csv_filename = 'Parameters_csv/newmitei_parameters_C63.csv'
+# csv_filename = 'Parameters_csv/felix_2018izu_parameters.csv'
+csv_filename = 'Parameters_csv/2019noshiro/felix_2019noshiro.csv'
 
 # create an instance
 myrocket = Rocket_simu()
