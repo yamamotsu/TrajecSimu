@@ -436,6 +436,9 @@ class trajec_main(Rocket_simu):
         # =======================================
 
         if t >= self.t_MECO:
+            # ---------------------------
+            # when engine is already cut off
+            # ---------------------------
             # mass
             mass = self.m_dry
             # moment of inertia
@@ -446,33 +449,39 @@ class trajec_main(Rocket_simu):
             CG = self.CG_dry
             
         else:
-            # mass
-            mass = self.m_dry + (self.t_MECO-t)/self.t_MECO * self.m_fuel
+            # ---------------------------
+            # when engine is still on
+            # ---------------------------
+            # propellant comsumption rate = (impulse consumed so far) / (total impulse)
+            time_so_far = np.array([0., t])
+            Impulse_so_far = integrate.trapz(self.thrust_function(time_so_far), time_so_far)
+            r = ( 1 - Impulse_so_far/self.Impulse_total )  # impulse ratio
+            
+            # total mass
+            mass = self.m_dry + r * self.m_prop
     
-            # fuel comsumption rate (assumed linear)
-            r = (self.t_MECO-t)/self.t_MECO 
             # total CG location
-            CG = (self.CG_dry*self.m_dry + self.CG_fuel*r*self.m_fuel) / (self.m_dry + r*self.m_fuel)
+            CG = (self.CG_dry*self.m_dry + self.CG_prop*r*self.m_prop) / mass
             # total MOI using parallel axis theorem
             tmp = np.array([0.,1.,1.])
-            MOI = self.MOI_dry + tmp*self.m_dry*(CG-self.CG_dry)**2. + r*self.MOI_fuel + tmp*(CG-self.CG_fuel)*(r*self.m_fuel)**2.
+            MOI = self.MOI_dry + tmp*self.m_dry*(CG-self.CG_dry)**2. + r*self.MOI_prop + tmp*(CG-self.CG_prop)*(r*self.m_prop)**2.
     
-            # finite differencing
-            h = 1.E-5
-            r2 = (self.t_MECO-t+h)/self.t_MECO 
-            # total CG location
-            CG2 = (self.CG_dry*self.m_dry + self.CG_fuel*r2*self.m_fuel) / (self.m_dry + r2*self.m_fuel)
+            # ---------------------------------
+            # finite differencing for d_dt_MOI
+            # ---------------------------------
+            h = 1.E-3
+            Impulse_so_far = integrate.trapz(self.thrust_function(np.array([0., t+h])), np.array([0., t+h]))
+            r2 = (1- Impulse_so_far/self.Impulse_total)  # impulse ratio
+            CG2 = (self.CG_dry*self.m_dry + self.CG_prop*r2*self.m_prop) / (self.m_dry + r2*self.m_prop)
             # total MOI using parallel axis theorem
-            tmp = np.array([0.,1.,1.])
-            MOI2 = self.MOI_dry + tmp*self.m_dry*(CG2-self.CG_dry)**2. + r2*self.MOI_fuel + tmp*(CG2-self.CG_fuel)*(r2*self.m_fuel)**2.
-    
-            # finite differencing
-            r3 = (self.t_MECO-t-h)/self.t_MECO 
+            MOI2 = self.MOI_dry + tmp*self.m_dry*(CG2-self.CG_dry)**2. + r2*self.MOI_prop + tmp*(CG2-self.CG_prop)*(r2*self.m_prop)**2.
+
+            Impulse_so_far = integrate.trapz(self.thrust_function(np.array([0., t-h])), np.array([0., t-h]))
+            r3 = (1- Impulse_so_far/self.Impulse_total)  # impulse ratio
             # total CG location
-            CG3 = (self.CG_dry*self.m_dry + self.CG_fuel*r3*self.m_fuel) / (self.m_dry + r3*self.m_fuel)
+            CG3 = (self.CG_dry*self.m_dry + self.CG_prop*r3*self.m_prop) / (self.m_dry + r3*self.m_prop)
             # total MOI using parallel axis theorem
-            tmp = np.array([0.,1.,1.])
-            MOI3 = self.MOI_dry + tmp*self.m_dry*(CG3-self.CG_dry)**2. + r3*self.MOI_fuel + tmp*(CG3-self.CG_fuel)*(r3*self.m_fuel)**2.
+            MOI3 = self.MOI_dry + tmp*self.m_dry*(CG3-self.CG_dry)**2. + r3*self.MOI_prop + tmp*(CG3-self.CG_prop)*(r3*self.m_prop)**2.
     
             d_dt_MOI = (MOI2 - MOI3) / (2*h)
         #END IF
@@ -908,11 +917,11 @@ class trajec_main(Rocket_simu):
         Cd = self.Cd0 + Cd_bar*( np.cos(2*alpha + np.pi) +1. ) 
         
         # compressiblity correction
-        if Mach > 0.93:
+        if Mach > 0.93 and Mach < 1.1:
             Mach = 0.93
         # END IF
         
-        Cd /= np.sqrt(1-Mach**2.)
+        Cd /= np.sqrt( abs(1-Mach**2.) )
         
         # print('AoA',alpha*180/np.pi, 'CL',Cl)
         """            

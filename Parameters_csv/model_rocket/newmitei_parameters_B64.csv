@@ -13,15 +13,15 @@ rocket_diameter, 0.026
 $ m_dry = 84g for 12/2 B6-4 test launch, 75.5 for C6-3 
 m_dry, 0.084
 $ m_fuel = 8.4g for B6-4, 14.2g for C6-3
-m_fuel, 0.0084
+m_prop, 0.0084
 CG_dry, 0.146
-CG_fuel, 0.146
+CG_prop, 0.146
 MOI_dry_x, 0.000002
 MOI_dry_y, 0.002890485
 MOI_dry_z, 0.002890485
-MOI_fuel_x, 0.
-MOI_fuel_y, 0.
-MOI_fuel_z, 0.
+MOI_prop_x, 0.
+MOI_prop_y, 0.
+MOI_prop_z, 0.
 
 $
 $ rocket aerodynamic parameters

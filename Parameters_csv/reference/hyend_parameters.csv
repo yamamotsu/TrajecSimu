@@ -18,9 +18,9 @@ CG_fuel, 5.5
 MOI_dry_x, 0.2007
 MOI_dry_y, 100.888
 MOI_dry_z, 100.888
-MOI_fuel_x, 0.03
-MOI_fuel_y, 10.3788
-MOI_fuel_z, 10.3788
+MOI_prop_x, 0.03
+MOI_prop_y, 10.3788
+MOI_prop_z, 10.3788
 
 $
 $ rocket aerodynamic parameters

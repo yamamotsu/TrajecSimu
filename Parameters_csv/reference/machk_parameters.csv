@@ -10,15 +10,15 @@ $
 rocket_height, 1.155
 rocket_diameter, 0.058
 m_dry, 2.
-m_fuel, 0.7
+m_prop, 0.7
 CG_dry, 0.625
-CG_fuel, 0.625
+CG_prop, 0.625
 MOI_dry_x, 0.011
 MOI_dry_y, 3.2663
 MOI_dry_z, 3.2663
-MOI_fuel_x, 0.001
-MOI_fuel_y, 0.038
-MOI_fuel_z, 0.038
+MOI_prop_x, 0.001
+MOI_prop_y, 0.038
+MOI_prop_z, 0.038
 
 $
 $ rocket aerodynamic parameters

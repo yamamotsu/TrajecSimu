@@ -89,6 +89,8 @@ class Rocket_simu():
                             'thrust_input_type' : 'curve_const_t',   # thrust input csv file type
                             'curve_fitting'     : True,              # True if curvefitting
                             'fitting_order'     : 15,                # order of polynomial
+                            'thrust_mag_factor' : 1.,                # thrust magnification factor
+                            'time_mag_factor'   : 1.,                # burn time magnification factor
     
                             # -----------------------------       
                             # parachute parameters
@@ -155,11 +157,11 @@ class Rocket_simu():
         # -----------------------------
         try:
             self.m_dry = float( self.params_dict['m_dry'] )       # dry weight of rocket i.e. exclude fuel
-            self.m_fuel = float( self.params_dict['m_fuel'] )     # fule weight // NOTE: total weight at lift off = m_dry + m_fuel
+            self.m_prop = float( self.params_dict['m_prop'] )     # propellant weight // NOTE: total weight at lift off = m_dry + m_prop
             self.CG_dry = float( self.params_dict['CG_dry'] )     # CG of dried body (nose tip = 0)
-            self.CG_fuel =float(  self.params_dict['CG_fuel'] )   # CG of fuel (assume CG_fuel = const.)
+            self.CG_prop =float(  self.params_dict['CG_prop'] )   # CG of prop (assume CG_fuel = const.)
             self.MOI_dry = np.array([float( self.params_dict['MOI_dry_x'] ), float( self.params_dict['MOI_dry_y'] ), float( self.params_dict['MOI_dry_z']) ])    # dry MOI (moment of inertia)
-            self.MOI_fuel = np.array([float( self.params_dict['MOI_fuel_x']), float( self.params_dict['MOI_fuel_y']), float( self.params_dict['MOI_fuel_z']) ])  # dry MOI (moment of inertia)
+            self.MOI_prop = np.array([float( self.params_dict['MOI_prop_x']), float( self.params_dict['MOI_prop_y']), float( self.params_dict['MOI_prop_z']) ])  # dry MOI (moment of inertia)
         except:
             # display error message
             print('Error in mass property parameters')
@@ -197,6 +199,8 @@ class Rocket_simu():
         # -----------------------------
         try:
             self.thrust_input_type = self.params_dict['thrust_input_type'] 
+            self.thrust_mag_factor = float(self.params_dict['thrust_mag_factor'] )
+            self.time_mag_factor = float(self.params_dict['time_mag_factor'] )
             
             if self.thrust_input_type == 'rectangle':
                 # rectangle thrust input (constant thrust * burn time)
@@ -218,13 +222,13 @@ class Rocket_simu():
             # END IF
 
             # setup thrust 
-            self.setup_thrust()
+            self.setup_thrust( self.thrust_mag_factor,  self.time_mag_factor)
             
         except:
             # display error message
             print('Error in engine property parameters')
             sys.exit()
-          
+        
         # -----------------------------  
         # parachute property
         # -----------------------------
@@ -248,17 +252,21 @@ class Rocket_simu():
     ----------------------------------------------------
     """
     
-    def setup_thrust(self):
+    def setup_thrust(self, thrust_factor = 1., time_factor = 1.):
         # =============================================
         # this method sets up thrust curve from dataframe input or CSV thrust curve
+        #
+        # input: thrust_factor : thrust magnification factor
+        #        time_factor   : burn time magnification factor
+        #
         # =============================================
         
         if self.thrust_input_type == 'rectangle':
             # rectangle thrust input (constant thrust * burn time)
             
             # setup interp1d function
-            self.time_array = np.array([0, self.t_MECO])  
-            self.thrust_array = np.ones(2) * self.thrustforce
+            self.time_array = np.array([0, self.t_MECO]) * time_factor
+            self.thrust_array = np.ones(2) * self.thrustforce * thrust_factor
                 
         else:
             # input thrust curve from csv file
@@ -272,19 +280,22 @@ class Rocket_simu():
             
             if self.thrust_input_type == 'curve_const_t': 
                 # raw thrust array
-                thrust_raw = input_raw
+                thrust_raw = input_raw 
                 
                 # cut off info where thrust is less that 1% of T_max
-                
-                self.thrust_array = thrust_raw[ thrust_raw >= 0.01*np.max(thrust_raw) ]
+                self.thrust_array = thrust_raw[ thrust_raw >= 0.01*np.max(thrust_raw) ] * thrust_factor
                 # time array
-                self.time_array = np.arange(0., len(self.thrust_array)*self.thrust_dt, self.thrust_dt)
+                self.time_array = np.arange(0., len(self.thrust_array)*self.thrust_dt, self.thrust_dt) * time_factor
                 
             elif self.thrust_input_type == 'time_curve': 
                 # time array
                 self.time_array = input_raw[:,0]
                 # thrust array
-                self.thrust_array = input_raw[:,1]
+                self.thrust_array = input_raw[:,1] 
+                
+                # cut-off and magnification
+                self.time_array = self.time_array[ self.thrust_array >= 0.01*np.max(self.thrust_array)] * time_factor
+                self.thrust_array = self.thrust_array[ self.thrust_array >= 0.01*np.max(self.thrust_array)] * thrust_factor
             # END IF
               
         # -----------------------
@@ -361,7 +372,7 @@ class Rocket_simu():
     
     def run(self):
         # =============================================
-        # A method for a single trajectory simulation
+        # A base method for a single trajectory simulation
         #
         # INPUT: params_df = dataframe containing user-defined parameters
         # =============================================
@@ -410,6 +421,120 @@ class Rocket_simu():
         
         return None
     
+    def run_rapid_design(self, m_dry, obj_type='altitude', obj_value=10000):
+        # =============================================
+        # A method for running simulations for rapid design toolbox 
+        #
+        # INPUT: m_dry         = target dry mass
+        #        obj_type      = design objective type. 'altitude' or 'Mach'
+        #        obj_value     = design objective value. [m] for 'altitude'.
+        # =============================================
+        
+        print('==========================')
+        print(' Rapid Design Toolbox')
+        print(' m_dry: ', m_dry)
+        print(' target type: ', obj_type)
+        print(' target value:', obj_value)
+        print('==========================')
+        
+        #
+        params_df = self.params_df
+        params_df.loc[params_df.parameter == 'm_dry', 'value'] = m_dry
+        
+        # thrust magnification factor setting
+        thrust_mag_array = np.linspace(2., 4., 10)
+        time_mag_array = np.zeros(len(thrust_mag_array))
+        
+        # loop over thrust_mag_factor
+        for i in range(len(thrust_mag_array)):
+            # overwrite thrust_mag_factor
+            params_df.loc[params_df.parameter == 'thrust_mag_factor', 'value'] = thrust_mag_array[i]
+            
+            # ------------------------------------
+            def objective(time_mag_factor):
+                # define a function that for a given time_mag_array, compute trajectory 
+                # then return (simulation result - objective value) 
+                
+                # variable echo
+                print('[thrust, time] =', thrust_mag_array[i], time_mag_factor)
+                # --------------------------
+                # variable setup: 
+                # --------------------------
+                # overwrite time_mag_factor
+                params_df.loc[params_df.parameter == 'time_mag_factor', 'value'] = time_mag_factor
+                # estimate mass of propellant from mag_factors
+                It_mag_factor = time_mag_factor * thrust_mag_array[i]
+                m_prop_per10000Ns = 6.   # mass of propellant[kg] for 10000N.s
+                """
+                raw data of the Univerisity of Michigan Rocket team
+                fuel:     2.4kg 
+                oxidizer: 13.75 kg
+                total impulse: 32100 N.s
+                   -> 5kg propellant / 10000N.s 
+                """
+                m_prop = m_prop_per10000Ns * It_mag_factor # mass of propellant for current design
+                # overwrite m_propellant
+                params_df.loc[params_df.parameter == 'm_prop', 'value'] = m_prop
+                
+                # --------------------------
+                # trajectory computation
+                # --------------------------
+                # compute trajectory
+                self.run()
+                # post-process and get objective value
+                self.postprocess('maxval')
+                # obtain result
+                if obj_type == 'altitude':
+                    # --- design objective: altitude ---
+                    result = self.res['flight_detail']['max_altitude']
+                
+                elif obj_type == 'Mach':
+                    # --- design objective: Mach ---
+                    result = self.res['flight_detail']['max_Mach']
+                    
+                # return residual
+                return result - obj_value
+            # ------------------------------------
+            
+            # solve " objective=0 "
+            time_mag_sol = optimize.fsolve(objective, 1.5, xtol=1.e-06)
+            time_mag_array[i] = time_mag_sol
+            
+            print('---------------------------------------')
+            print('mag. factor for [thrust, time] =', thrust_mag_array[i], time_mag_sol)
+            print('total impulse: ', 10000. * thrust_mag_array[i] * time_mag_sol)
+            print('---------------------------------------')
+            print(' ')
+            
+        # END FOR
+        
+        # plot 
+        print('==========================')
+        print(' Rapid Design Toolbox (recap)')
+        print(' m_dry: ', m_dry)
+        print(' target type: ', obj_type)
+        print(' target value:', obj_value)
+        print('==========================')
+        time_dim = time_mag_array*10
+        thrust_dim = thrust_mag_array*1000
+        impulse_dim = time_dim*thrust_dim
+        fig = plt.figure()
+        ax1 = fig.add_subplot(111)
+        ax1.plot(time_dim, thrust_dim, label='thrust', color='r')  # burn time vs. averaged thrust
+        ax2 = ax1.twinx() 
+        ax2.plot(time_dim, impulse_dim, label='It', color='b') # burn time vs. total impulse
+        
+        ax1.set_xlabel('burn time[s]')
+        ax1.set_ylabel('averaged thrust[N]')
+        ax1.grid(True)
+        ax2.set_ylabel('total impulse')
+        plt.legend()
+        plt.title('Required engine property')
+        plt.show()
+
+        return None
+        
+        
     def run_loop(self, wind_direction_array = np.linspace(0.,360.,9), wind_speed_array = np.linspace(1.,7.,7)):
         # =============================================
         # A method for running loop to get landing distribution
@@ -488,16 +613,15 @@ class Rocket_simu():
         
         # record landing distribution
         tmp_dict = {'wind_directions': wind_direction_array,
-                        'wind_speeds': wind_speed_array,
-                        'loc_parachute': self.loc_para,
-                        'loc_ballistic': self.loc_bal,
+                    'wind_speeds': wind_speed_array,
+                    'loc_parachute': self.loc_para,
+                    'loc_ballistic': self.loc_bal,
                 }
         self.res.update({'landing_distribution':tmp_dict})
         
         self.plot_dist(wind_speed_array)
         
         return None
-        
         
     
     """
@@ -530,6 +654,8 @@ class Rocket_simu():
             time = time[0:land_time_id] # array before landing: cut off useless after-landing part
             # landing_time = time[-1]
             
+            # get thrust deta
+            self.echo_thrust()
             # get landing location
             self.get_landing_location() 
             # get max values
@@ -552,7 +678,7 @@ class Rocket_simu():
             
             # *** plot and show all results ***
             # thrust data echo
-            self.echo_thrust()
+            self.echo_thrust(True)
             
             # get landing location
             self.get_landing_location(True)
@@ -581,38 +707,47 @@ class Rocket_simu():
         
         return None
         
-    def echo_thrust(self):
+    def echo_thrust(self,show=False):
         # =============================================
         # this method plots thrust curve along with engine properties
         # =============================================
         
         # engine properties
-        print('--------------------')
-        print(' THRUST DATA ECHO')
-        print(' total impulse (raw): ', self.trajectory.Impulse_total, '[N.s]')
-        if self.trajectory.curve_fitting:
-            print('       error due to poly. fit: ', self.trajectory.It_poly_error, ' [%]')
-        # END IF
-        print(' burn time: ', self.trajectory.t_MECO, '[s]')
-        print(' max. thrust: ', self.trajectory.Thrust_max, '[N]')
-        print(' average thrust: ', self.trajectory.Thrust_avg, '[N]')
-        print('--------------------')
             
+        # record engine property
+        tmp_dict = {'total_impulse  ': self.trajectory.Impulse_total, 
+                    'max_thrust'     : self.trajectory.Thrust_max,
+                    'average_thrust' : self.trajectory.Thrust_avg,
+                    'burn_time'      : self.trajectory.t_MECO,
+                }
+        self.res.update({'engine' : tmp_dict})
 
-        # plot filtered thrust curve
-        fig = plt.figure(1)
-        plt.plot(self.trajectory.time_array, self.trajectory.thrust_array, color='red', label='raw')
-        if self.trajectory.curve_fitting:
-            thrust_used = self.trajectory.thrust_function(self.trajectory.time_array)
-            thrust_used[thrust_used<0.] = 0.
-            plt.plot(self.trajectory.time_array, thrust_used, lw = 3, label='fitted')
+        if show:
+            print('--------------------')
+            print(' THRUST DATA ECHO')
+            print(' total impulse (raw): ', self.trajectory.Impulse_total, '[N.s]')
+            if self.trajectory.curve_fitting:
+                print('       error due to poly. fit: ', self.trajectory.It_poly_error, ' [%]')
+            # END IF
+            print(' burn time: ', self.trajectory.t_MECO, '[s]')
+            print(' max. thrust: ', self.trajectory.Thrust_max, '[N]')
+            print(' average thrust: ', self.trajectory.Thrust_avg, '[N]')
+            print('--------------------')
+            # plot filtered thrust curve
+            fig = plt.figure(1)
+            plt.plot(self.trajectory.time_array, self.trajectory.thrust_array, color='red', label='raw')
+            if self.trajectory.curve_fitting:
+                thrust_used = self.trajectory.thrust_function(self.trajectory.time_array)
+                thrust_used[thrust_used<0.] = 0.
+                plt.plot(self.trajectory.time_array, thrust_used, lw = 3, label='fitted')
+            # END IF
+            plt.title('Thrust curve')
+            plt.xlabel('t [s]')
+            plt.ylabel('thrust [N]')
+            plt.grid()
+            plt.legend()
+            #plt.show () 
         # END IF
-        plt.title('Thrust curve')
-        plt.xlabel('t [s]')
-        plt.ylabel('thrust [N]')
-        plt.grid()
-        plt.legend()
-        #plt.show () 
         
         return None
         
@@ -685,7 +820,7 @@ class Rocket_simu():
                     'total_flight_time': self.trajectory.landing_time,                       # total flight time
                     'max_Q_all'  : maxq_dict,
                     }
-        self.res.update(tmp_dict)
+        self.res.update({'flight_detail' : tmp_dict})
         
         if show:
             # show results

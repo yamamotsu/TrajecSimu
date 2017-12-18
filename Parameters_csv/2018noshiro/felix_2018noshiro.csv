@@ -26,15 +26,15 @@ $
 rocket_height, 3.5
 rocket_diameter, 0.17
 m_dry, 47.
-m_fuel, 25.
+m_prop, 25.
 CG_dry, 2.2
-CG_fuel, 2.
+CG_prop, 2.
 MOI_dry_x, 0.5007
 MOI_dry_y, 50.888
 MOI_dry_z, 50.888
-MOI_fuel_x, 0.1
-MOI_fuel_y, 3.
-MOI_fuel_z, 3.
+MOI_prop_x, 0.1
+MOI_prop_y, 3.
+MOI_prop_z, 3.
 
 $
 $ rocket aerodynamic parameters
@@ -59,7 +59,7 @@ $
 $ numerical parameters
 $
 dt, 0.05
-t_max, 1000.
+t_max, 10000.
 
 $              
 $ launch parameters
@@ -77,9 +77,12 @@ $	'rectangle'     for constant thrust. Requires "thrust"[N], "t_MECO"[s]
 $ 	'curve_const_t' for thrust log with constant time step. Requires "thrust_dt"[s] and "thrust_filename"
 $   'time_curve'    for 
 $ 
-thrust_input_type,curve_const_t
-thrust_dt, 0.001
-thrust_filename,umich_thrust.csv
+thrust_input_type,time_curve
+$ thrust_dt, 0.00076
+$ thrust_filename,umich_thrust.csv
+thrust_filename,thrust_1000N_10s.csv
+thrust_mag_factor, 1.5
+time_mag_factor, 1.5
 
 $
 $ parachute parameters
