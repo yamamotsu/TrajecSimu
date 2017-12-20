@@ -79,7 +79,9 @@ class Rocket_simu():
                             # rocket aerodynamic parameters
                             # ----------------------------- 
                             'aero_fin_mode'    : 'integ',  # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
-                            'Cd0'              : 0.6,      #  drag coefficient at Mach 0.1, AoA = 0deg
+                            'Cd0'              : 0.6,      # drag coefficient at Mach 0.1, AoA = 0deg
+                            'Cmp'              : 0.,       # stability derivative of rolling moment coefficient (aerodynamic damping)
+                            'Cmq'              : 10.,      # stability derivative of pitching/yawing moment coefficient (aerodynamic damping)
 
                             # -----------------------------
                             # rocket engine parameters
@@ -163,17 +165,18 @@ class Rocket_simu():
             self.MOI_dry = np.array([float( self.params_dict['MOI_dry_x'] ), float( self.params_dict['MOI_dry_y'] ), float( self.params_dict['MOI_dry_z']) ])    # dry MOI (moment of inertia)
             self.MOI_prop = np.array([float( self.params_dict['MOI_prop_x']), float( self.params_dict['MOI_prop_y']), float( self.params_dict['MOI_prop_z']) ])  # dry MOI (moment of inertia)
             # --- set properties for jet-damping moment calculation
-            L_all = float(self.params_dict['rocket_height'] ) # height of rocket
+            rocket_height = float(self.params_dict['rocket_height'] ) # height of rocket
+            rocket_diameter = float(self.params_dict['rocket_diameter'] ) # height of rocket
             # nozzle exit radius
             try:
                 # when r_nozzle is specified in input csv file
                 r_nozzle = float(self.params_dict['nozzle_exit_r'])
             except:
                 # otherwise, set r_nozzle = 0.2 * rocket radius
-                r_nozzle = float(self.params_dict['rocket_diameter'])/2 * 0.2
+                r_nozzle = rocket_diameter/2 * 0.2
             # END IF
             self.re2_jet_p = r_nozzle**2./2
-            self.re2_jet_q = (L_all-self.CG_prop)**2.
+            self.re2_jet_q = (rocket_height-self.CG_prop)**2.
             
         except:
             # display error message
@@ -186,8 +189,11 @@ class Rocket_simu():
         try:
             self.CP_body = float( self.params_dict['CP_body'] )  # CP location without fins (budy tube+nose) (nose tip = 0)
             self.Cd0 = float( self.params_dict['Cd0'] )          # total 0 angle-of-attack drag coefficient
-            self.X_area = np.pi*float( self.params_dict['rocket_diameter'] )**2. /4.  # cross-sectional area
+            self.X_area = np.pi*rocket_diameter**2. /4.  # cross-sectional area
             self.aero_fin_mode = self.params_dict['aero_fin_mode']   # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
+            # aerodynamic damping moment coefficient
+            Cm_omega = np.array([ float(self.params_dict['Cmp']), float(self.params_dict['Cmq']), float(self.params_dict['Cmq']) ]) 
+            self.Cm_omega_bar = Cm_omega * np.array([rocket_diameter, rocket_height, rocket_height])**2.   # multiply with length^2. no longer non-dimansional
             
             if self.aero_fin_mode == 'indiv':
                 # for individual fin computation, define fin parameters here
