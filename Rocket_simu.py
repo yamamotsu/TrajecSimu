@@ -158,10 +158,23 @@ class Rocket_simu():
         try:
             self.m_dry = float( self.params_dict['m_dry'] )       # dry weight of rocket i.e. exclude fuel
             self.m_prop = float( self.params_dict['m_prop'] )     # propellant weight // NOTE: total weight at lift off = m_dry + m_prop
-            self.CG_dry = float( self.params_dict['CG_dry'] )     # CG of dried body (nose tip = 0)
-            self.CG_prop =float(  self.params_dict['CG_prop'] )   # CG of prop (assume CG_fuel = const.)
+            self.CG_dry = float( self.params_dict['CG_dry'] )     # CG location of dried body (nose tip = 0)
+            self.CG_prop =float(  self.params_dict['CG_prop'] )   # CG location of prop (assume CG_fuel = const.)
             self.MOI_dry = np.array([float( self.params_dict['MOI_dry_x'] ), float( self.params_dict['MOI_dry_y'] ), float( self.params_dict['MOI_dry_z']) ])    # dry MOI (moment of inertia)
             self.MOI_prop = np.array([float( self.params_dict['MOI_prop_x']), float( self.params_dict['MOI_prop_y']), float( self.params_dict['MOI_prop_z']) ])  # dry MOI (moment of inertia)
+            # --- set properties for jet-damping moment calculation
+            L_all = float(self.params_dict['rocket_height'] ) # height of rocket
+            # nozzle exit radius
+            try:
+                # when r_nozzle is specified in input csv file
+                r_nozzle = float(self.params_dict['nozzle_exit_r'])
+            except:
+                # otherwise, set r_nozzle = 0.2 * rocket radius
+                r_nozzle = float(self.params_dict['rocket_diameter'])/2 * 0.2
+            # END IF
+            self.re2_jet_p = r_nozzle**2./2
+            self.re2_jet_q = (L_all-self.CG_prop)**2.
+            
         except:
             # display error message
             print('Error in mass property parameters')
@@ -313,7 +326,7 @@ class Rocket_simu():
         
         if self.thrust_input_type == 'rectangle':
             # set 1d interpolation function for rectangle thrust
-            self.thrust_function = interpolate.interp1d(self.time_array, self.thrust_array)
+            self.thrust_function = interpolate.interp1d(self.time_array, self.thrust_array, fill_value='extrapolate')
             
         else:
             # ------------------
@@ -355,7 +368,7 @@ class Rocket_simu():
                 
             else:
                 # 1d interpolation
-                self.thrust_function = interpolate.interp1d(self.time_array, self.thrust_array)
+                self.thrust_function = interpolate.interp1d(self.time_array, self.thrust_array, fill_value='extrapolate')
             
         # END IF
             
@@ -726,9 +739,12 @@ class Rocket_simu():
             print('--------------------')
             print(' THRUST DATA ECHO')
             print(' total impulse (raw): ', self.trajectory.Impulse_total, '[N.s]')
-            if self.trajectory.curve_fitting:
-                print('       error due to poly. fit: ', self.trajectory.It_poly_error, ' [%]')
-            # END IF
+            try:
+                if self.trajectory.curve_fitting:
+                    print('       error due to poly. fit: ', self.trajectory.It_poly_error, ' [%]')    
+                # END IF
+            except:
+                pass
             print(' burn time: ', self.trajectory.t_MECO, '[s]')
             print(' max. thrust: ', self.trajectory.Thrust_max, '[N]')
             print(' average thrust: ', self.trajectory.Thrust_avg, '[N]')
@@ -736,11 +752,14 @@ class Rocket_simu():
             # plot filtered thrust curve
             fig = plt.figure(1)
             plt.plot(self.trajectory.time_array, self.trajectory.thrust_array, color='red', label='raw')
-            if self.trajectory.curve_fitting:
-                thrust_used = self.trajectory.thrust_function(self.trajectory.time_array)
-                thrust_used[thrust_used<0.] = 0.
-                plt.plot(self.trajectory.time_array, thrust_used, lw = 3, label='fitted')
-            # END IF
+            try:
+                if self.trajectory.curve_fitting:
+                    thrust_used = self.trajectory.thrust_function(self.trajectory.time_array)
+                    thrust_used[thrust_used<0.] = 0.
+                    plt.plot(self.trajectory.time_array, thrust_used, lw = 3, label='fitted')
+                # END IF
+            except:
+                pass
             plt.title('Thrust curve')
             plt.xlabel('t [s]')
             plt.ylabel('thrust [N]')

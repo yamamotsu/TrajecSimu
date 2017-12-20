@@ -35,6 +35,9 @@ class trajec_main(Rocket_simu):
         # setup parameters in the instance by calling superclasses method
         self.get_default()   
         self.overwrite_parameters(params_df)   
+        
+        # setup Cd0
+        self.setup_Cd0()
 
         return None     
 
@@ -87,12 +90,12 @@ class trajec_main(Rocket_simu):
             # create time array
             
             self.t = np.arange(t0,self.t_max,self.dt)
-            try:
+            #try:
                 # ---  run trajectory computation   ---
-                self.solution = odeint(self.f_main, u0, self.t)
-            except:
-                print('ode integration failed!')
-                pass
+            self.solution = odeint(self.f_main, u0, self.t)
+            #except:
+            #    print('ode integration failed!')
+            #    pass
             
         else:
             
@@ -305,7 +308,7 @@ class trajec_main(Rocket_simu):
         dx_dt = np.dot(Tbl.T,v)
         
         # call mass properties 
-        mass,MOI,d_dt_MOI,CG = self.mass_MOI(t)
+        mass,MOI,d_dt_MOI,d_dt_m,CG = self.mass_MOI(t)
         
         # ----------------------------
         #    2. Velocity
@@ -317,7 +320,7 @@ class trajec_main(Rocket_simu):
         #             mass   = mass(t):   function of time t   
     
         # call aerodynamic force/moment
-        aeroF,aeroM = self.aero(x,v,omega,Tbl,CG)     
+        aeroF,aeroM = self.aero(x,v,omega,Tbl,CG)
         
         grav = np.array([0.,0.,-9.81])  # gravitational accel. in fixed coord.
         
@@ -396,6 +399,12 @@ class trajec_main(Rocket_simu):
             #tmp2 = 1./MOI[1] * ( (MOI[2]-MOI[0])*omega[0]*omega[2] - d_dt_MOI[1]*omega[1] + aeroM[1]) 
             #tmp3 = 1./MOI[2] * ( (MOI[0]-MOI[1])*omega[0]*omega[1] - d_dt_MOI[2]*omega[2] + aeroM[2]) 
             #domega_dt = np.array([tmp1,tmp2,tmp3])
+            
+            # ---  jet damping correction  ---
+            # note: jet damping correction: d_dt_MOI += dm/dt*(Lall_CG - Lprop_CG)^2 - re^2 )
+            #                               re = (L-Lprop_CG) for pitch, re = (r_nozzleexit)^2 / 2 
+            d_dt_MOI += d_dt_m * np.array([ self.re2_jet_p, (CG-self.CG_prop)**2.-self.re2_jet_q, (CG-self.CG_prop)**2.-self.re2_jet_q]) 
+            
             domega_dt = (-np.cross(omega,MOI*omega) - d_dt_MOI*omega + aeroM) / MOI
         # END IF
 
@@ -437,20 +446,20 @@ class trajec_main(Rocket_simu):
 
         if t >= self.t_MECO:
             # ---------------------------
-            # when engine is already cut off
+            # mass for coasting phase
             # ---------------------------
             # mass
             mass = self.m_dry
             # moment of inertia
             MOI = self.MOI_dry
-            # time rate of MOI
-            d_dt_MOI = np.zeros(3)
             # total CG location
             CG = self.CG_dry
             
+            return mass, MOI, np.zeros(3), 0., CG
+            
         else:
             # ---------------------------
-            # when engine is still on
+            # mass for powered phase
             # ---------------------------
             # propellant comsumption rate = (impulse consumed so far) / (total impulse)
             time_so_far = np.array([0., t])
@@ -467,26 +476,30 @@ class trajec_main(Rocket_simu):
             MOI = self.MOI_dry + tmp*self.m_dry*(CG-self.CG_dry)**2. + r*self.MOI_prop + tmp*(CG-self.CG_prop)*(r*self.m_prop)**2.
     
             # ---------------------------------
-            # finite differencing for d_dt_MOI
+            # finite differencing for d(MOI)/dt, dm/dt
             # ---------------------------------
             h = 1.E-3
             Impulse_so_far = integrate.trapz(self.thrust_function(np.array([0., t+h])), np.array([0., t+h]))
             r2 = (1- Impulse_so_far/self.Impulse_total)  # impulse ratio
-            CG2 = (self.CG_dry*self.m_dry + self.CG_prop*r2*self.m_prop) / (self.m_dry + r2*self.m_prop)
+            # total mass
+            mass2 = self.m_dry + r2 * self.m_prop
+            # total CG location
+            CG2 = (self.CG_dry*self.m_dry + self.CG_prop*r2*self.m_prop) / (self.m_dry + r2*self.m_prop) 
             # total MOI using parallel axis theorem
             MOI2 = self.MOI_dry + tmp*self.m_dry*(CG2-self.CG_dry)**2. + r2*self.MOI_prop + tmp*(CG2-self.CG_prop)*(r2*self.m_prop)**2.
 
             Impulse_so_far = integrate.trapz(self.thrust_function(np.array([0., t-h])), np.array([0., t-h]))
             r3 = (1- Impulse_so_far/self.Impulse_total)  # impulse ratio
-            # total CG location
+            mass3 = self.m_dry + r3 * self.m_prop
             CG3 = (self.CG_dry*self.m_dry + self.CG_prop*r3*self.m_prop) / (self.m_dry + r3*self.m_prop)
-            # total MOI using parallel axis theorem
             MOI3 = self.MOI_dry + tmp*self.m_dry*(CG3-self.CG_dry)**2. + r3*self.MOI_prop + tmp*(CG3-self.CG_prop)*(r3*self.m_prop)**2.
     
+            # dm/dt and d(MOI)/dt
+            d_dt_m = (mass2 - mass3) / (2*h)
             d_dt_MOI = (MOI2 - MOI3) / (2*h)
+            
+            return mass, MOI, d_dt_MOI, d_dt_m, CG
         #END IF
-        
-        return mass, MOI, d_dt_MOI, CG
                 
     
     def thrust(self,t):
@@ -911,6 +924,10 @@ class trajec_main(Rocket_simu):
         # -------------------
         # Drag Coefficient
         # -------------------
+        """ 
+        # ---------------------
+        #   sqrt(1-Mach^2) model
+        # ---------------------
         # drag coefficient "amplitude" for cosign curve fit
         Cd_bar = 5.
         # Cd = (self.Cd0 + k2*alpha) / np.sqrt(1-(Mach-0.05)**2.)
@@ -922,32 +939,29 @@ class trajec_main(Rocket_simu):
         # END IF
         
         Cd /= np.sqrt( abs(1-Mach**2.) )
-        
-        # print('AoA',alpha*180/np.pi, 'CL',Cl)
-        """            
-        # TSRP model
-        if Mach < 0.6:
-            Cd00 = 0.3
-        elif Mach < 0.8:
-            Cd00 = 0.3 + (Mach-0.6)/0.2 * (0.4-0.3)
-        elif Mach < 1.0:
-            Cd00 = 0.4 + (Mach-0.8)/0.2 * (0.62-0.4)
-        elif Mach < 1.2:
-            Cd00 = 0.62 + (Mach-1.)/0.2 * (0.70-0.62)
-        elif Mach < 1.4:
-            Cd00 = 0.7 + (Mach-1.2)/0.2 * (0.64-0.7)
-        else:
-            Cd00 = 0.5
-        k2 = Cd00 / 0.17
-        
-        Cd = Cd00 + k2*alpha
-        #print('Cd',Cd)
-        """               
+        """
+        # get zero angle Cd
+        Cd0 = self.f_cd0(Mach)
+        # drag coefficient "amplitude" for cosign curve fit
+        Cd_bar = 8.
+        Cd = Cd0 + Cd_bar*( np.cos(2*alpha + np.pi) +1. )
 
         return Cd, Cl
         
+
+    def setup_Cd0(self):
+        # setup Cd0 curve as a function of Mach
         
-         
+        # array from CFD
+        # Cd0_array = np.array([0.6, 0.706,0.699,0.707,0.756,0.964,1.120,1.094,1.060,1.023,0.985,0.951,0.914,0.877,0.839,0.802,0.7])
+        Cd0_array = np.array([0.7,0.806,0.799,0.810,0.869,1.121,1.312,1.280,1.240,1.195,1.150,1.108,1.065,1.020,0.975,0.930, 0.8])
+        Mach_array = np.array([0., 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 10.0])
+        
+        # 2d interpolation
+        self.f_cd0 = interpolate.interp1d(Mach_array,Cd0_array,kind='linear')
+        
+        return None
+        
     def state2vecs_quat(self,u):
         # convert state vector u to vectors
         x = u[0:3]     # translation         :in fixed coordinate
