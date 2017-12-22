@@ -15,11 +15,11 @@ from Rocket_simu import Rocket_simu
 # csv_filename = 'Parameters_csv/2018izu/relenza_ntk.csv'
 # csv_filename = 'Parameters_csv/newmitei_parameters_C63.csv'
 csv_filename = 'Parameters_csv/2018noshiro/felix_2018noshiro.csv'
-# csv_filename = 'Parameters_csv/2016izu/2016M_parameters.csv'
+#csv_filename = 'Parameters_csv/2016izu/2016M_parameters.csv'
+#csv_filename = 'Parameters_csv/reference/hyend_parameters.csv'
 
 # create an instance
 myrocket = Rocket_simu(csv_filename)
-
 
 # ------------------------------------
 # run a single trajectory computation 
@@ -30,7 +30,7 @@ myrocket.run_single()
 # run an optimization problem
 # ------------------------------------
 """
-m_dry = 50.
+m_dry = 40.
 obj_type= 'Mach' 
 obj_value = 1.2
 myrocket.run_rapid_design(m_dry, obj_type, obj_value)

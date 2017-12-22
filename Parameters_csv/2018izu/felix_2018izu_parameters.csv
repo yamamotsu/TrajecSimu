@@ -21,8 +21,8 @@ $ rocket airframe parameters
 $
 rocket_height, 3.2
 rocket_diameter, 0.17
-m_dry, 42.
-m_prop, 13.
+m_dry, 40.
+m_prop, 31.5.
 CG_dry, 2.2
 CG_prop, 2.
 MOI_dry_x, 0.2007

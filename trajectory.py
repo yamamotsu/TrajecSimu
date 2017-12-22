@@ -35,9 +35,6 @@ class trajec_main(Rocket_simu):
         # setup parameters in the instance by calling superclasses method
         self.get_default()   
         self.overwrite_parameters(params_df)   
-        
-        # setup Cd0
-        self.setup_Cd0()
 
         return None     
 
@@ -75,6 +72,9 @@ class trajec_main(Rocket_simu):
             
         # set flag = 1 (on launch rail)
         self.flag = 1
+        
+        # setup Cd0 interpolation curve
+        self.setup_Cd0()
     
         """
         print('----------------------------')
@@ -176,9 +176,8 @@ class trajec_main(Rocket_simu):
         
 
     def f_main(self,u,t):
-        
         # =======================================
-        # this method is the RHS function of ODE
+        # this method is the Right hand side function of ODE (du_dt = f_main(u))
         #
         # INPUT: t    = time (scalar) 
         #        u    = state vector u (13*1)
@@ -205,7 +204,7 @@ class trajec_main(Rocket_simu):
         # count the number of function call
         self.N_iter += 1
         
-        # backuping 
+        # backup
         if np.mod(self.N_iter, self.N_record) == 0:
             self.add_backup(t,u)
         #END IF
@@ -217,7 +216,7 @@ class trajec_main(Rocket_simu):
         # v =     velocity            :expressed in body coordinate
         # q =     atitude quaternion  :conversion from local-fixed to body
         # omega = angular velocity    :expressed in body coordinate
-        x,v,q,omega = self.state2vecs_quat(u)  
+        x,v,q,omega = self.state2vecs_quat(u)
          
             
         # ----------------------------
@@ -308,7 +307,7 @@ class trajec_main(Rocket_simu):
         dx_dt = np.dot(Tbl.T,v)
         
         # call mass properties 
-        mass,MOI,d_dt_MOI,d_dt_m,CG = self.mass_MOI(t)
+        mass,MOI,d_dt_MOI,CG = self.mass_MOI(t)  # note that jet-damping effect is included in d(MOT)/dt
         
         # ----------------------------
         #    2. Velocity
@@ -319,16 +318,14 @@ class trajec_main(Rocket_simu):
         #             thrust = thrust(t): function of time t
         #             mass   = mass(t):   function of time t   
     
-        # call aerodynamic force/moment
-        aeroF,aeroM = self.aero(x,v,omega,Tbl,CG)
-        
-        grav = np.array([0.,0.,-9.81])  # gravitational accel. in fixed coord.
+        # get aerodynamic force/moment
+        aeroF, aeroM = self.aero(x,v,omega,Tbl,CG)  
         
         # set external force depending on the state
         if self.flag == 1:
             # on launch rail -> du/dx only. Consider rail-rocket friction force 
             # total acceleration 
-            dv_dt = -np.cross(omega,v) + np.dot(Tbl,grav) + (aeroF + self.thrust(t) + self.friction() ) / mass
+            dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.grav) + (aeroF + self.thrust(t) + self.friction() ) / mass
             # cancell out y,z
             dv_dt = np.array([dv_dt[0],0.,0.])
             
@@ -341,16 +338,16 @@ class trajec_main(Rocket_simu):
         elif self.flag == 2:
             # thrust ON
             # total acceleration 
-            dv_dt = -np.cross(omega,v) + np.dot(Tbl,grav) + (aeroF + self.thrust(t)) / mass
+            dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.grav) + (aeroF + self.thrust(t)) / mass
             
         elif self.flag == 3 or self.flag == 5:
             # thrust OFF
             # total acceleration 
-            dv_dt = -np.cross(omega,v) + np.dot(Tbl,grav) + aeroF / mass
+            dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.grav) + aeroF / mass
 
         elif self.flag == 4:
             # parachute deployed
-            dv_dt = np.dot(Tbl,grav) + self.parachute_F(x,v,Tbl) / mass
+            dv_dt = np.dot(Tbl, self.grav) + self.parachute_F(x,v,Tbl) / mass
         #END IF
         
         
@@ -375,7 +372,6 @@ class trajec_main(Rocket_simu):
         # convert back to float array
         dq_dt = quaternion.as_float_array(dq_dt2)
         
-        
         # ----------------------------
         #    4. Angular velocity
         # ----------------------------
@@ -399,12 +395,6 @@ class trajec_main(Rocket_simu):
             #tmp2 = 1./MOI[1] * ( (MOI[2]-MOI[0])*omega[0]*omega[2] - d_dt_MOI[1]*omega[1] + aeroM[1]) 
             #tmp3 = 1./MOI[2] * ( (MOI[0]-MOI[1])*omega[0]*omega[1] - d_dt_MOI[2]*omega[2] + aeroM[2]) 
             #domega_dt = np.array([tmp1,tmp2,tmp3])
-            
-            # ---  jet damping correction  ---
-            # note: jet damping correction: d_dt_MOI += dm/dt*(Lall_CG - Lprop_CG)^2 - re^2 )
-            #                               re = (L-Lprop_CG) for pitch, re = (r_nozzleexit)^2 / 2 
-            d_dt_MOI += d_dt_m * np.array([ self.re2_jet_p, (CG-self.CG_prop)**2.-self.re2_jet_q, (CG-self.CG_prop)**2.-self.re2_jet_q]) 
-            
             domega_dt = (-np.cross(omega,MOI*omega) - d_dt_MOI*omega + aeroM) / MOI
         # END IF
 
@@ -446,7 +436,7 @@ class trajec_main(Rocket_simu):
 
         if t >= self.t_MECO:
             # ---------------------------
-            # mass for coasting phase
+            # mass for coasting phase (m, I = const.)
             # ---------------------------
             # mass
             mass = self.m_dry
@@ -455,11 +445,11 @@ class trajec_main(Rocket_simu):
             # total CG location
             CG = self.CG_dry
             
-            return mass, MOI, np.zeros(3), 0., CG
+            return mass, MOI, np.zeros(3), CG
             
         else:
             # ---------------------------
-            # mass for powered phase
+            # mass for powered phase (m = m(t), I = I(t))
             # ---------------------------
             # propellant comsumption rate = (impulse consumed so far) / (total impulse)
             time_so_far = np.array([0., t])
@@ -468,7 +458,6 @@ class trajec_main(Rocket_simu):
             
             # total mass
             mass = self.m_dry + r * self.m_prop
-    
             # total CG location
             CG = (self.CG_dry*self.m_dry + self.CG_prop*r*self.m_prop) / mass
             # total MOI using parallel axis theorem
@@ -498,7 +487,13 @@ class trajec_main(Rocket_simu):
             d_dt_m = (mass2 - mass3) / (2*h)
             d_dt_MOI = (MOI2 - MOI3) / (2*h)
             
-            return mass, MOI, d_dt_MOI, d_dt_m, CG
+            # ---  jet damping correction  ---
+            # note: jet damping correction: d_dt_MOI += dm/dt*(Lall_CG - Lprop_CG)^2 - re^2 )
+            #                               re = (L-Lprop_CG) for pitch, re = (r_nozzleexit)^2 / 2 
+            d_dt_MOI += d_dt_m * np.array([ self.re2_jet_p, (CG-self.CG_prop)**2.-self.re2_jet_q, (CG-self.CG_prop)**2.-self.re2_jet_q]) 
+
+            
+            return mass, MOI, d_dt_MOI, CG
         #END IF
                 
     
@@ -509,16 +504,14 @@ class trajec_main(Rocket_simu):
         # INPUT:  t = time
         # OUTPUT: T = thrust vector in body coord.
         # =======================================
-        
-        # rectangle thrust
-        # T = np.array([self.thrustforce,0.,0.])
-        
-        # use interp1d
+            
+        # get thrust power at t=t
         tmp = self.thrust_function(t)
         if tmp < 0:
             # if thrust is nagative, which might happen because of curve fitting, overwrite with 0
             tmp = 0.
             
+        # thrust vector (assume 0 misalignment)
         T = np.array([tmp,0.,0.])
         
         return T
@@ -528,10 +521,10 @@ class trajec_main(Rocket_simu):
         # =======================================
         # returns friction force (rail-rocket contact) 
         # 
-        # INPUT:  t = time
-        # OUTPUT: fric = friction force vector in body coord.
+        # OUTPUT: friction = friction force vector in body coord.
         # =======================================
         friction = np.zeros(3)
+        
         return friction
             
         
@@ -586,19 +579,14 @@ class trajec_main(Rocket_simu):
             #END IF
         #END IF
                 
-            
         #if np.isnan(phi):
         #    phi = np.arctan( v_air[1]+0.0001/v_air[2]+0.0001 )
             
-        
         # ----------------------------------
         #   aerodynamic force on body ( might exclude fins)
         # ----------------------------------
         # air property at the altitude
         _,_,rho,a = self.standard_air(x[2])
-        
-        #print('h',x[2],'T',T,'p',p,'rho',rho)
-        #print('h',x[2],'rho',rho)
         
         # Mach number
         Mach = air_speed/a
@@ -623,12 +611,8 @@ class trajec_main(Rocket_simu):
         # aerodynamic moment wrt CG
         moment_all = np.cross( np.array([CG-self.CP_body,0.,0.]) , force_all )
         
-        # add aerodynamic damping effect
-        moment_all -= 0.25 * rho * air_speed * self.X_area * self.Cm_omega_bar * omega
-        
-        # print('Cd,Cl', Cd,Cl, 'alpha', alpha*180/np.pi)
-        #print('')
-        
+        # add aerodynamic damping effect  (note: Cm_omega < 0)
+        moment_all += 0.25 * rho * air_speed * self.X_area * self.Cm_omega_bar * omega
         
         if self.aero_fin_mode == 'indiv':
             # ----------------------------------
@@ -945,6 +929,11 @@ class trajec_main(Rocket_simu):
         """
         # get zero angle Cd
         Cd0 = self.f_cd0(Mach)
+        if self.flag <= 2:
+            # powered phase Cd0 correction
+            Cd0 -= 0.1 
+        # END IF
+        
         # drag coefficient "amplitude" for cosign curve fit
         Cd_bar = 8.
         Cd = Cd0 + Cd_bar*( np.cos(2*alpha + np.pi) +1. )
@@ -953,7 +942,7 @@ class trajec_main(Rocket_simu):
         
 
     def setup_Cd0(self):
-        # setup Cd0 curve as a function of Mach
+        # setup Cd0 curve as a function of Mach number
         
         # array from CFD
         # Cd0_array = np.array([0.6, 0.706,0.699,0.707,0.756,0.964,1.120,1.094,1.060,1.023,0.985,0.951,0.914,0.877,0.839,0.802,0.7])
@@ -976,7 +965,6 @@ class trajec_main(Rocket_simu):
         q2 = quaternion.as_quat_array(q)
     
         return x,v,q2,omega
-        
         
                     
     def add_backup(self,t,u):

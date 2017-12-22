@@ -25,8 +25,10 @@ $ rocket airframe parameters
 $
 rocket_height, 3.5
 rocket_diameter, 0.17
-m_dry, 47.
-m_prop, 25.
+$m_dry, 40.
+$m_prop, 31.5
+m_dry, 20.
+m_prop, 10.
 CG_dry, 2.2
 CG_prop, 2.
 MOI_dry_x, 0.5007
@@ -81,7 +83,7 @@ thrust_input_type,time_curve
 $ thrust_dt, 0.00076
 $ thrust_filename,umich_thrust.csv
 thrust_filename,thrust_1000N_10s.csv
-thrust_mag_factor, 1.5
+thrust_mag_factor, 1.
 time_mag_factor, 1.5
 
 $

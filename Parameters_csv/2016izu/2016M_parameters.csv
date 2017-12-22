@@ -65,9 +65,8 @@ $	'rectangle'     for constant thrust. Requires "thrust"[N], "t_MECO"[s], and "t
 $ 	'curve_const_t' for thrust log with constant time step. Requires "  "[s] and "thrust_filename"
 $   'time_curve'    for 
 $ 
-thrust_input_type,rectangle
-t_MECO, 9.3
-thrust, 800.
+thrust_input_type,time_curve
+thrust_filename,HyperTEK_M1000_075.csv
 
 $
 $ parachute parameters

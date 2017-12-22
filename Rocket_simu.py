@@ -80,8 +80,8 @@ class Rocket_simu():
                             # ----------------------------- 
                             'aero_fin_mode'    : 'integ',  # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
                             'Cd0'              : 0.6,      # drag coefficient at Mach 0.1, AoA = 0deg
-                            'Cmp'              : 0.,       # stability derivative of rolling moment coefficient (aerodynamic damping)
-                            'Cmq'              : 10.,      # stability derivative of pitching/yawing moment coefficient (aerodynamic damping)
+                            'Cmp'              : -0.,      # stability derivative of rolling moment coefficient (aerodynamic damping)
+                            'Cmq'              : -10.,     # stability derivative of pitching/yawing moment coefficient (aerodynamic damping)
 
                             # -----------------------------
                             # rocket engine parameters
@@ -140,15 +140,21 @@ class Rocket_simu():
             self.elev_angle = float( self.params_dict['elev_angle'] )         # angle of elevation [deg]
             self.azimuth = float( self.params_dict['azimuth'] )               # north=0, east=90, south=180, west=270 [deg]
             self.rail_height = rail_length * np.sin(self.elev_angle * np.pi/180.) # height of launch rail in fixed coord.
+    
             # atmosphere property
             self.T0 = float( self.params_dict['T0'] )  # temperature [K] at 10m alt.
             self.p0 = float( self.params_dict['p0'] )  # pressure [Pa] at 10m alt.
+            
             # wind property
             wind_direction = float( self.params_dict['wind_direction'] )  # azimuth where wind is blowing from [deg]
             angle_wind = (-wind_direction + 90.) * np.pi/180.    # angle to which wind goes (x orients east, y orients north)
             self.wind_unitvec = -np.array([np.cos(angle_wind), np.sin(angle_wind) ,0.])
             self.wind_speed = float( self.params_dict['wind_speed'] )         # speed of wind [m/s] at 10m alt.
             self.Cwind = float( self.params_dict['Cwind'] )                   # wind coefficient
+            
+            # earth gravity
+            self.grav = np.array([0.,0.,-9.81])    # in fixed coordinate
+            
         except:
             # display error message
             print('Error in launch condition parameters')
@@ -164,6 +170,7 @@ class Rocket_simu():
             self.CG_prop =float(  self.params_dict['CG_prop'] )   # CG location of prop (assume CG_fuel = const.)
             self.MOI_dry = np.array([float( self.params_dict['MOI_dry_x'] ), float( self.params_dict['MOI_dry_y'] ), float( self.params_dict['MOI_dry_z']) ])    # dry MOI (moment of inertia)
             self.MOI_prop = np.array([float( self.params_dict['MOI_prop_x']), float( self.params_dict['MOI_prop_y']), float( self.params_dict['MOI_prop_z']) ])  # dry MOI (moment of inertia)
+            
             # --- set properties for jet-damping moment calculation
             rocket_height = float(self.params_dict['rocket_height'] ) # height of rocket
             rocket_diameter = float(self.params_dict['rocket_diameter'] ) # height of rocket
@@ -191,6 +198,7 @@ class Rocket_simu():
             self.Cd0 = float( self.params_dict['Cd0'] )          # total 0 angle-of-attack drag coefficient
             self.X_area = np.pi*rocket_diameter**2. /4.  # cross-sectional area
             self.aero_fin_mode = self.params_dict['aero_fin_mode']   # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
+            
             # aerodynamic damping moment coefficient
             Cm_omega = np.array([ float(self.params_dict['Cmp']), float(self.params_dict['Cmq']), float(self.params_dict['Cmq']) ]) 
             self.Cm_omega_bar = Cm_omega * np.array([rocket_diameter, rocket_height, rocket_height])**2.   # multiply with length^2. no longer non-dimansional
@@ -241,7 +249,7 @@ class Rocket_simu():
             # END IF
 
             # setup thrust 
-            self.setup_thrust( self.thrust_mag_factor,  self.time_mag_factor)
+            self.setup_thrust( self.thrust_mag_factor,  self.time_mag_factor)  # magnification
             
         except:
             # display error message
@@ -254,7 +262,7 @@ class Rocket_simu():
         try:
             self.t_deploy = float( self.params_dict['t_deploy'] )         # parachute deployment time from ignition
             self.t_para_delay = float( self.params_dict['t_para_delay'] ) # parachute deployment time from apogee detection
-            self.apogee_count = 0                               # apogee count
+            self.apogee_count = 0                                         # apogee count
             self.Cd_para = float( self.params_dict['Cd_para'] )           # parachute drag coefficient
             self.S_para = float( self.params_dict['S_para'] )             # parachute area [m^2]
         except:
@@ -464,13 +472,18 @@ class Rocket_simu():
         thrust_mag_array = np.linspace(2., 4., 10)
         time_mag_array = np.zeros(len(thrust_mag_array))
         
+        # initialize resulting array
+        mass_all = np.zeros(len(thrust_mag_array))
+        max_alt_all = np.zeros(len(thrust_mag_array))
+        max_mach_all = np.zeros(len(thrust_mag_array))
+        
         # loop over thrust_mag_factor
         for i in range(len(thrust_mag_array)):
             # overwrite thrust_mag_factor
             params_df.loc[params_df.parameter == 'thrust_mag_factor', 'value'] = thrust_mag_array[i]
             
             # ------------------------------------
-            def objective(time_mag_factor):
+            def obj_all(time_mag_factor):
                 # define a function that for a given time_mag_array, compute trajectory 
                 # then return (simulation result - objective value) 
                 
@@ -483,13 +496,14 @@ class Rocket_simu():
                 params_df.loc[params_df.parameter == 'time_mag_factor', 'value'] = time_mag_factor
                 # estimate mass of propellant from mag_factors
                 It_mag_factor = time_mag_factor * thrust_mag_array[i]
-                m_prop_per10000Ns = 6.   # mass of propellant[kg] for 10000N.s
+                m_prop_per10000Ns =7.   # mass of propellant[kg] for 10000N.s
                 """
-                raw data of the Univerisity of Michigan Rocket team
+                reference raw data of the UM Rocket team
                 fuel:     2.4kg 
                 oxidizer: 13.75 kg
                 total impulse: 32100 N.s
                    -> 5kg propellant / 10000N.s 
+                   85% of prop mass = ox, 15% = fuel
                 """
                 m_prop = m_prop_per10000Ns * It_mag_factor # mass of propellant for current design
                 # overwrite m_propellant
@@ -503,28 +517,46 @@ class Rocket_simu():
                 # post-process and get objective value
                 self.postprocess('maxval')
                 # obtain result
+                max_alt = self.res['flight_detail']['max_altitude']
+                max_mach = self.res['flight_detail']['max_Mach']
                 if obj_type == 'altitude':
                     # --- design objective: altitude ---
-                    result = self.res['flight_detail']['max_altitude']
+                    result = max_alt
                 
                 elif obj_type == 'Mach':
                     # --- design objective: Mach ---
-                    result = self.res['flight_detail']['max_Mach']
+                    result = max_mach
                     
                 # return residual
-                return result - obj_value
+                return result - obj_value, max_alt, max_mach, m_prop
+            
+            def obj_residual(time_mag_factor):
+                tmp,_,_,_ = obj_all(time_mag_factor)
+                return tmp
             # ------------------------------------
             
+            
             # solve " objective=0 "
-            time_mag_sol = optimize.fsolve(objective, 1.5, xtol=1.e-06)
+            time_mag_sol = optimize.fsolve(obj_residual, 1.5, xtol=1.e-06)
             time_mag_array[i] = time_mag_sol
+            
+            # re-do optimal computation for recording
+            _, max_alt, max_mach,m_prop = obj_all(time_mag_sol)
+            # record
+            mass_all[i] = m_dry + m_prop
+            max_alt_all[i] = max_alt[0]
+            max_mach_all[i] = max_mach[0]
             
             print('---------------------------------------')
             print('mag. factor for [thrust, time] =', thrust_mag_array[i], time_mag_sol)
             print('total impulse: ', 10000. * thrust_mag_array[i] * time_mag_sol)
+            print('max mach: ', max_mach)
+            print('max alt: ', max_alt)
+            print('liftoff mass: ', mass_all[i])
             print('---------------------------------------')
             print(' ')
             
+            # solve for 
         # END FOR
         
         # plot 
@@ -537,9 +569,11 @@ class Rocket_simu():
         time_dim = time_mag_array*10
         thrust_dim = thrust_mag_array*1000
         impulse_dim = time_dim*thrust_dim
+        # ---- plot 1 ------
         fig = plt.figure()
         ax1 = fig.add_subplot(111)
         ax1.plot(time_dim, thrust_dim, label='thrust', color='r')  # burn time vs. averaged thrust
+        plt.legend()
         ax2 = ax1.twinx() 
         ax2.plot(time_dim, impulse_dim, label='It', color='b') # burn time vs. total impulse
         
@@ -551,6 +585,31 @@ class Rocket_simu():
         plt.title('Required engine property')
         plt.show()
 
+        # ---- plot 2 ------
+        plt.figure()
+        plt.plot(time_dim, mass_all)
+        plt.xlabel('burn time[s]')
+        plt.ylabel('lift off mass')
+        
+        # ---- plot 3 ------
+        fig = plt.figure()
+        ax1 = fig.add_subplot(111)
+        ax1.plot(time_dim, max_alt_all, label='altitude', color='r')  # burn time vs. averaged thrust
+        plt.legend()
+        ax2 = ax1.twinx() 
+        ax2.plot(time_dim, max_mach_all, label='Mach', color='b') # burn time vs. total impulse
+        plt.legend()
+        
+        ax1.set_xlabel('burn time[s]')
+        ax1.set_ylabel('max altitude [m]')
+        ax1.grid(True)
+        ax2.set_ylabel('max mach')
+        plt.legend()
+        plt.title('Flight detail')
+        plt.show()
+        
+        
+        
         return None
         
         

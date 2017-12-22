@@ -12,9 +12,9 @@ $
 rocket_height, 7.5
 rocket_diameter, 0.223
 m_dry, 75.
-m_fuel, 86.
+m_prop, 86.
 CG_dry, 5.5
-CG_fuel, 5.5
+CG_prop, 5.5
 MOI_dry_x, 0.2007
 MOI_dry_y, 100.888
 MOI_dry_z, 100.888
@@ -32,24 +32,24 @@ $aero_fin_mode,indiv
 $
 $ fin configuration
 $
-fin_alpha, 0.  
-LE_fins, 3.  
-fin_Lroot, 0.4  
-fin_Ltip, 0.2   
-fin_h, 0.14     
-fin_ang, 47.5   
-fin_dis, 3
+$fin_alpha, 0.  
+$LE_fins, 3.  
+$fin_Lroot, 0.4  
+$fin_Ltip, 0.2   
+$fin_h, 0.14     
+$fin_ang, 47.5   
+$fin_dis, 3
 
 $
 $ numerical parameters
 $
 dt, 0.01
-t_max, 15000.1
+t_max, 15000.
 
 $              
 $ launch parameters
 $
-elev_angle, 80.
+elev_angle, 88.
 azimuth, 0.  
 wind_direction, 160.
 wind_speed, 4.
@@ -59,7 +59,8 @@ T0, 255.
 $
 $ engine parameters
 $
-t_MECO, 15.
+thrust_input_type,rectangle
+t_MECO, 16.
 thrust, 10000.
 
 $
