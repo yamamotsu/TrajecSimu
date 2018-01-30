@@ -6,6 +6,7 @@ Created on Sun Dec  3 17:33:18 2017
 @author: shugo
 """
 
+
 # sample driver script for trajectory simulation
 
 import numpy as np
