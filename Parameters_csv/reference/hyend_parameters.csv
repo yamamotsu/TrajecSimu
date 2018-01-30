@@ -44,7 +44,7 @@ $
 $ numerical parameters
 $
 dt, 0.01
-t_max, 15000.
+t_max, 40.
 
 $              
 $ launch parameters

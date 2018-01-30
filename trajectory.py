@@ -11,10 +11,10 @@ from scipy.integrate import ode, odeint
 from scipy import fftpack, interpolate, integrate, optimize
 # import pandas as pd
 import quaternion 
-from Rocket_simu import Rocket_simu
-# import matplotlib.pyplot as plt
+from Rocket_simu import Rocket
+import matplotlib.pyplot as plt
 
-class trajec_main(Rocket_simu):
+class trajec_main(Rocket):
     """
     ====================================================
     This class is a sub-class for main ODE trajecotry computation
@@ -35,6 +35,9 @@ class trajec_main(Rocket_simu):
         # setup parameters in the instance by calling superclasses method
         self.get_default()   
         self.overwrite_parameters(params_df)   
+        
+        # initialize a dict for result
+        self.res_trajec_main = {'v_para_deploy': -1, 'v_launch_clear': -1}
 
         return None     
 
@@ -82,7 +85,12 @@ class trajec_main(Rocket_simu):
         print('----------------------------')
         print(' ')
         """
-                        
+          
+        """
+        self.record_tmp = np.array([0]) 
+        self.time_all = np.array([0]) 
+        """
+        
         if self.integ == 'lsoda_odeint':
             # ---------------------------------------------
             #      use scipy.odeint
@@ -128,7 +136,14 @@ class trajec_main(Rocket_simu):
         print(' ')
         print(' ')
         """ 
-
+        """
+        plt.figure
+        plt.plot(self.time_all, self.record_tmp)
+        # plt.plot(self.t_MECO, self.m_dry, '*')
+        plt.grid()
+        plt.show()
+        """
+        
         return None   
         
 
@@ -240,6 +255,8 @@ class trajec_main(Rocket_simu):
             
             # record history
             self.add_backup(t,u)
+            # record launch clear speed
+            self.res_trajec_main.update( { 'v_launch_clear' : np.linalg.norm(v) } )
             # switch into thrusted flight
             self.flag = 2   
             
@@ -271,6 +288,8 @@ class trajec_main(Rocket_simu):
             
             # record history
             self.add_backup(t,u)
+            # record parachute deploy air speed
+            self.res_trajec_main.update( {'v_para_deploy' : air_speed } )
             # switch into parachute fall
             self.flag = 4  
             
@@ -320,7 +339,9 @@ class trajec_main(Rocket_simu):
     
         # get aerodynamic force/moment
         aeroF, aeroM = self.aero(x,v,omega,Tbl,CG)  
-        
+        # self.time_all = np.append(self.time_all, t)
+        # self.record_tmp = np.append(self.record_tmp, aeroF[0])
+    
         # set external force depending on the state
         if self.flag == 1:
             # on launch rail -> du/dx only. Consider rail-rocket friction force 
@@ -341,7 +362,7 @@ class trajec_main(Rocket_simu):
             dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.grav) + (aeroF + self.thrust(t)) / mass
             
         elif self.flag == 3 or self.flag == 5:
-            # thrust OFF
+            # coasting phase
             # total acceleration 
             dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.grav) + aeroF / mass
 
@@ -452,7 +473,7 @@ class trajec_main(Rocket_simu):
             # mass for powered phase (m = m(t), I = I(t))
             # ---------------------------
             # propellant comsumption rate = (impulse consumed so far) / (total impulse)
-            time_so_far = np.array([0., t])
+            time_so_far = np.linspace(0., t)
             Impulse_so_far = integrate.trapz(self.thrust_function(time_so_far), time_so_far)
             r = ( 1 - Impulse_so_far/self.Impulse_total )  # impulse ratio
             
@@ -468,30 +489,24 @@ class trajec_main(Rocket_simu):
             # finite differencing for d(MOI)/dt, dm/dt
             # ---------------------------------
             h = 1.E-3
-            Impulse_so_far = integrate.trapz(self.thrust_function(np.array([0., t+h])), np.array([0., t+h]))
+            Impulse_so_far = integrate.trapz(self.thrust_function(np.linspace(0., t+h)), np.linspace(0., t+h))
             r2 = (1- Impulse_so_far/self.Impulse_total)  # impulse ratio
             # total mass
-            mass2 = self.m_dry + r2 * self.m_prop
+            # mass2 = self.m_dry + r2 * self.m_prop
             # total CG location
             CG2 = (self.CG_dry*self.m_dry + self.CG_prop*r2*self.m_prop) / (self.m_dry + r2*self.m_prop) 
             # total MOI using parallel axis theorem
             MOI2 = self.MOI_dry + tmp*self.m_dry*(CG2-self.CG_dry)**2. + r2*self.MOI_prop + tmp*(CG2-self.CG_prop)*(r2*self.m_prop)**2.
 
-            Impulse_so_far = integrate.trapz(self.thrust_function(np.array([0., t-h])), np.array([0., t-h]))
+            Impulse_so_far = integrate.trapz(self.thrust_function(np.linspace(0., t-h)), np.linspace(0., t-h))
             r3 = (1- Impulse_so_far/self.Impulse_total)  # impulse ratio
-            mass3 = self.m_dry + r3 * self.m_prop
+            # mass3 = self.m_dry + r3 * self.m_prop
             CG3 = (self.CG_dry*self.m_dry + self.CG_prop*r3*self.m_prop) / (self.m_dry + r3*self.m_prop)
             MOI3 = self.MOI_dry + tmp*self.m_dry*(CG3-self.CG_dry)**2. + r3*self.MOI_prop + tmp*(CG3-self.CG_prop)*(r3*self.m_prop)**2.
     
             # dm/dt and d(MOI)/dt
-            d_dt_m = (mass2 - mass3) / (2*h)
+            # d_dt_m = (mass2 - mass3) / (2*h)
             d_dt_MOI = (MOI2 - MOI3) / (2*h)
-            
-            # ---  jet damping correction  ---
-            # note: jet damping correction: d_dt_MOI += dm/dt*(Lall_CG - Lprop_CG)^2 - re^2 )
-            #                               re = (L-Lprop_CG) for pitch, re = (r_nozzleexit)^2 / 2 
-            d_dt_MOI += d_dt_m * np.array([ self.re2_jet_p, (CG-self.CG_prop)**2.-self.re2_jet_q, (CG-self.CG_prop)**2.-self.re2_jet_q]) 
-
             
             return mass, MOI, d_dt_MOI, CG
         #END IF
@@ -586,7 +601,7 @@ class trajec_main(Rocket_simu):
         #   aerodynamic force on body ( might exclude fins)
         # ----------------------------------
         # air property at the altitude
-        _,_,rho,a = self.standard_air(x[2])
+        _,_,rho,a = self.standard_air(x[2])        
         
         # Mach number
         Mach = air_speed/a
@@ -893,51 +908,40 @@ class trajec_main(Rocket_simu):
             k1 = 1.
         else:
             # lift coefficient slope for fin-body integrated computations
-            k1 = 15.0
-            # k1 = 5.8
+            # k1 = 15.0
+            k1 = 5.8
             
         # END IF
         Cl = k1 * alpha 
         
+        """
         #
-        AoA_sep = 20.  # AoA at when flow separation occurs
+        AoA_sep = 15.  # AoA at when flow separation occurs
         if alpha > AoA_sep*np.pi/180.:
             # if AoA is larger than 15 deg, assume separation and loss of Cl
             Cl_sep = k1 * AoA_sep*np.pi/180. # Cl at alpha=15 
             A = 0.1
             Cl = Cl_sep * np.exp( -A*( alpha-AoA_sep*np.pi/180. ) )
         #END IF
+        """
         
         # -------------------
         # Drag Coefficient
         # -------------------
-        """ 
-        # ---------------------
-        #   sqrt(1-Mach^2) model
-        # ---------------------
-        # drag coefficient "amplitude" for cosign curve fit
-        Cd_bar = 5.
-        # Cd = (self.Cd0 + k2*alpha) / np.sqrt(1-(Mach-0.05)**2.)
-        Cd = self.Cd0 + Cd_bar*( np.cos(2*alpha + np.pi) +1. ) 
-        
-        # compressiblity correction
-        if Mach > 0.93 and Mach < 1.1:
-            Mach = 0.93
-        # END IF
-        
-        Cd /= np.sqrt( abs(1-Mach**2.) )
-        """
         # get zero angle Cd
         Cd0 = self.f_cd0(Mach)
+        
         if self.flag <= 2:
             # powered phase Cd0 correction
             Cd0 -= 0.1 
         # END IF
         
+        Cd0 *= self.Cd0/0.7
+        
         # drag coefficient "amplitude" for cosign curve fit
         Cd_bar = 8.
         Cd = Cd0 + Cd_bar*( np.cos(2*alpha + np.pi) +1. )
-
+        
         return Cd, Cl
         
 

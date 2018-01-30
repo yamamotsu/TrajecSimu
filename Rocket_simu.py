@@ -13,9 +13,10 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from scipy import fftpack, interpolate, integrate, optimize
 import pandas as pd
+import subprocess
 
 # class
-class Rocket_simu():
+class Rocket():
     """
     ====================================================
     This is a class for simulation parameter setting, execution of main computation, and post-processing.
@@ -35,17 +36,34 @@ class Rocket_simu():
         # This method is called when an instance is created
         # =============================================
         
-        # initialize parameters by setting default values
-        self.get_default()   
-        
         # read csv file that contains initial parameters
         self.params_df = pd.read_csv(csv_filename, comment='$', names=('parameter', 'value') ) # '$' denotes commet out  
+        
+        # initialize parameters by setting default values
+        self.get_default()   
+        self.overwrite_parameters(self.params_df)
         
         # initialize a dict for result
         self.res = {}
 
         return None      
+    
+    def overwrite_dataframe(self, params):   
+        # =============================================
+        # this method overwrites pd.dataframe parameter values.
+        # used for loop / optimization 
+        #
+        # input: params : n*2 numpy array that contains parameters to be updated
+        #                 [ ['param_name1', value], ['param_name2', value] , ...]
+        #
+        # =============================================
         
+        # loop over parameters in params
+        for i in range(params.shape[0]):
+            self.params_df.loc[self.params_df.parameter == params[i,0], 'value'] = params[i,1]
+        # END FOR
+        
+        return None
         
     def get_default(self):
         # =============================================
@@ -73,7 +91,7 @@ class Rocket_simu():
                             # wind property
                             'wind_direction' : 0.,      # azimuth where wind is blowing from 
                             'wind_speed'     : 4.,      # wind speed at 10m alt. [m/s] 
-                            'Cwind'          : 1./7.4,  # wind model power coefficient 
+                            'Cwind'          : 1./6.0,  # wind model power coefficient 
     
                             # -----------------------------
                             # rocket aerodynamic parameters
@@ -114,7 +132,7 @@ class Rocket_simu():
         # INPUT: params_df = dataframe containing parameters
         # =============================================
 
-        # update param_dict (convert Dataframe -> array -> dict)
+        # overwrite param_dict (convert Dataframe -> array -> dict)
         self.params_dict.update( dict( params_df_userdef.as_matrix() ) ) 
 
         # set instance variables from params_dict
@@ -125,7 +143,7 @@ class Rocket_simu():
             self.dt = float( self.params_dict['dt'] )            # time step
             self.t_max = float(self.params_dict['t_max'] )       # maximum time
             self.N_record = float(self.params_dict['N_record'] ) # record history every ** iteration
-            self.integ = self.params_dict['integ']               # time integration scheme
+            self.integ = self.params_dict['integ'].strip()       # time integration scheme
         except:
             # display error message
             print('Error in executive control parameters')
@@ -171,20 +189,6 @@ class Rocket_simu():
             self.MOI_dry = np.array([float( self.params_dict['MOI_dry_x'] ), float( self.params_dict['MOI_dry_y'] ), float( self.params_dict['MOI_dry_z']) ])    # dry MOI (moment of inertia)
             self.MOI_prop = np.array([float( self.params_dict['MOI_prop_x']), float( self.params_dict['MOI_prop_y']), float( self.params_dict['MOI_prop_z']) ])  # dry MOI (moment of inertia)
             
-            # --- set properties for jet-damping moment calculation
-            rocket_height = float(self.params_dict['rocket_height'] ) # height of rocket
-            rocket_diameter = float(self.params_dict['rocket_diameter'] ) # height of rocket
-            # nozzle exit radius
-            try:
-                # when r_nozzle is specified in input csv file
-                r_nozzle = float(self.params_dict['nozzle_exit_r'])
-            except:
-                # otherwise, set r_nozzle = 0.2 * rocket radius
-                r_nozzle = rocket_diameter/2 * 0.2
-            # END IF
-            self.re2_jet_p = r_nozzle**2./2
-            self.re2_jet_q = (rocket_height-self.CG_prop)**2.
-            
         except:
             # display error message
             print('Error in mass property parameters')
@@ -194,10 +198,14 @@ class Rocket_simu():
         # aerodynamic properties
         # -----------------------------
         try:
+            # rocket dimension
+            rocket_height = float(self.params_dict['rocket_height'] ) # height of rocket
+            rocket_diameter = float(self.params_dict['rocket_diameter'] ) # height of rocket
+            
             self.CP_body = float( self.params_dict['CP_body'] )  # CP location without fins (budy tube+nose) (nose tip = 0)
             self.Cd0 = float( self.params_dict['Cd0'] )          # total 0 angle-of-attack drag coefficient
             self.X_area = np.pi*rocket_diameter**2. /4.  # cross-sectional area
-            self.aero_fin_mode = self.params_dict['aero_fin_mode']   # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
+            self.aero_fin_mode = self.params_dict['aero_fin_mode'].strip()  # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
             
             # aerodynamic damping moment coefficient
             Cm_omega = np.array([ float(self.params_dict['Cmp']), float(self.params_dict['Cmq']), float(self.params_dict['Cmq']) ]) 
@@ -225,7 +233,7 @@ class Rocket_simu():
         # engine property
         # -----------------------------
         try:
-            self.thrust_input_type = self.params_dict['thrust_input_type'] 
+            self.thrust_input_type = self.params_dict['thrust_input_type'].strip() 
             self.thrust_mag_factor = float(self.params_dict['thrust_mag_factor'] )
             self.time_mag_factor = float(self.params_dict['time_mag_factor'] )
             
@@ -238,11 +246,11 @@ class Rocket_simu():
                 if self.thrust_input_type == 'curve_const_t':
                     # thrust curve with constant time step (csv of 1 raw)
                     self.thrust_dt = float( self.params_dict['thrust_dt'] )
-                    self.thrust_filename = self.params_dict['thrust_filename']
+                    self.thrust_filename = self.params_dict['thrust_filename'].strip()
                 
                 elif self.thrust_input_type == 'time_curve':
-                    # time and thrust log is given in csv
-                    self.thrust_filename = self.params_dict['thrust_filename']  
+                    # time and thrust log is given in csv.
+                    self.thrust_filename = self.params_dict['thrust_filename'].strip()
                 # END IF
                 self.curve_fitting = self.params_dict['curve_fitting']
                 self.fitting_order = self.params_dict['fitting_order']
@@ -273,6 +281,11 @@ class Rocket_simu():
 
         return None   
     
+    
+        
+        
+        
+        
     """
     ----------------------------------------------------
         Method for thrust properties setup          
@@ -287,6 +300,9 @@ class Rocket_simu():
         #        time_factor   : burn time magnification factor
         #
         # =============================================
+        
+        thrust_factor = 1.
+        time_factor = 1.
         
         if self.thrust_input_type == 'rectangle':
             # rectangle thrust input (constant thrust * burn time)
@@ -430,277 +446,8 @@ class Rocket_simu():
 
         return None
     
-    def run_single(self):
-        # =============================================
-        # A method for a single trajectory simulation and post-processing
-        #
-        # INPUT: csv_filename         = Path and filename of a csv file defining parameters
-        # =============================================
-           
-        # read a csv file and put parameters into pandas dataframe 
-        # params_df = pd.read_csv(csv_filename, comment='$', names=('parameter', 'value') ) # '$' denotes commet out  
-        
-        # run a main computation
-        self.run()
-        
-        # post-process
-        self.postprocess('all')
-        
-        return None
     
-    def run_rapid_design(self, m_dry, obj_type='altitude', obj_value=10000):
-        # =============================================
-        # A method for running simulations for rapid design toolbox 
-        #
-        # INPUT: m_dry         = target dry mass
-        #        obj_type      = design objective type. 'altitude' or 'Mach'
-        #        obj_value     = design objective value. [m] for 'altitude'.
-        # =============================================
-        
-        print('==========================')
-        print(' Rapid Design Toolbox')
-        print(' m_dry: ', m_dry)
-        print(' target type: ', obj_type)
-        print(' target value:', obj_value)
-        print('==========================')
-        
-        #
-        params_df = self.params_df
-        params_df.loc[params_df.parameter == 'm_dry', 'value'] = m_dry
-        
-        # thrust magnification factor setting
-        thrust_mag_array = np.linspace(2., 4., 10)
-        time_mag_array = np.zeros(len(thrust_mag_array))
-        
-        # initialize resulting array
-        mass_all = np.zeros(len(thrust_mag_array))
-        max_alt_all = np.zeros(len(thrust_mag_array))
-        max_mach_all = np.zeros(len(thrust_mag_array))
-        
-        # loop over thrust_mag_factor
-        for i in range(len(thrust_mag_array)):
-            # overwrite thrust_mag_factor
-            params_df.loc[params_df.parameter == 'thrust_mag_factor', 'value'] = thrust_mag_array[i]
-            
-            # ------------------------------------
-            def obj_all(time_mag_factor):
-                # define a function that for a given time_mag_array, compute trajectory 
-                # then return (simulation result - objective value) 
-                
-                # variable echo
-                print('[thrust, time] =', thrust_mag_array[i], time_mag_factor)
-                # --------------------------
-                # variable setup: 
-                # --------------------------
-                # overwrite time_mag_factor
-                params_df.loc[params_df.parameter == 'time_mag_factor', 'value'] = time_mag_factor
-                # estimate mass of propellant from mag_factors
-                It_mag_factor = time_mag_factor * thrust_mag_array[i]
-                m_prop_per10000Ns =7.   # mass of propellant[kg] for 10000N.s
-                """
-                reference raw data of the UM Rocket team
-                fuel:     2.4kg 
-                oxidizer: 13.75 kg
-                total impulse: 32100 N.s
-                   -> 5kg propellant / 10000N.s 
-                   85% of prop mass = ox, 15% = fuel
-                """
-                m_prop = m_prop_per10000Ns * It_mag_factor # mass of propellant for current design
-                # overwrite m_propellant
-                params_df.loc[params_df.parameter == 'm_prop', 'value'] = m_prop
-                
-                # --------------------------
-                # trajectory computation
-                # --------------------------
-                # compute trajectory
-                self.run()
-                # post-process and get objective value
-                self.postprocess('maxval')
-                # obtain result
-                max_alt = self.res['flight_detail']['max_altitude']
-                max_mach = self.res['flight_detail']['max_Mach']
-                if obj_type == 'altitude':
-                    # --- design objective: altitude ---
-                    result = max_alt
-                
-                elif obj_type == 'Mach':
-                    # --- design objective: Mach ---
-                    result = max_mach
-                    
-                # return residual
-                return result - obj_value, max_alt, max_mach, m_prop
-            
-            def obj_residual(time_mag_factor):
-                tmp,_,_,_ = obj_all(time_mag_factor)
-                return tmp
-            # ------------------------------------
-            
-            
-            # solve " objective=0 "
-            time_mag_sol = optimize.fsolve(obj_residual, 1.5, xtol=1.e-06)
-            time_mag_array[i] = time_mag_sol
-            
-            # re-do optimal computation for recording
-            _, max_alt, max_mach,m_prop = obj_all(time_mag_sol)
-            # record
-            mass_all[i] = m_dry + m_prop
-            max_alt_all[i] = max_alt[0]
-            max_mach_all[i] = max_mach[0]
-            
-            print('---------------------------------------')
-            print('mag. factor for [thrust, time] =', thrust_mag_array[i], time_mag_sol)
-            print('total impulse: ', 10000. * thrust_mag_array[i] * time_mag_sol)
-            print('max mach: ', max_mach)
-            print('max alt: ', max_alt)
-            print('liftoff mass: ', mass_all[i])
-            print('---------------------------------------')
-            print(' ')
-            
-            # solve for 
-        # END FOR
-        
-        # plot 
-        print('==========================')
-        print(' Rapid Design Toolbox (recap)')
-        print(' m_dry: ', m_dry)
-        print(' target type: ', obj_type)
-        print(' target value:', obj_value)
-        print('==========================')
-        time_dim = time_mag_array*10
-        thrust_dim = thrust_mag_array*1000
-        impulse_dim = time_dim*thrust_dim
-        # ---- plot 1 ------
-        fig = plt.figure()
-        ax1 = fig.add_subplot(111)
-        ax1.plot(time_dim, thrust_dim, label='thrust', color='r')  # burn time vs. averaged thrust
-        plt.legend()
-        ax2 = ax1.twinx() 
-        ax2.plot(time_dim, impulse_dim, label='It', color='b') # burn time vs. total impulse
-        
-        ax1.set_xlabel('burn time[s]')
-        ax1.set_ylabel('averaged thrust[N]')
-        ax1.grid(True)
-        ax2.set_ylabel('total impulse')
-        plt.legend()
-        plt.title('Required engine property')
-        plt.show()
-
-        # ---- plot 2 ------
-        plt.figure()
-        plt.plot(time_dim, mass_all)
-        plt.xlabel('burn time[s]')
-        plt.ylabel('lift off mass')
-        
-        # ---- plot 3 ------
-        fig = plt.figure()
-        ax1 = fig.add_subplot(111)
-        ax1.plot(time_dim, max_alt_all, label='altitude', color='r')  # burn time vs. averaged thrust
-        plt.legend()
-        ax2 = ax1.twinx() 
-        ax2.plot(time_dim, max_mach_all, label='Mach', color='b') # burn time vs. total impulse
-        plt.legend()
-        
-        ax1.set_xlabel('burn time[s]')
-        ax1.set_ylabel('max altitude [m]')
-        ax1.grid(True)
-        ax2.set_ylabel('max mach')
-        plt.legend()
-        plt.title('Flight detail')
-        plt.show()
-        
-        
-        
-        return None
-        
-        
-    def run_loop(self, wind_direction_array = np.linspace(0.,360.,9), wind_speed_array = np.linspace(1.,7.,7)):
-        # =============================================
-        # A method for running loop to get landing distribution
-        #
-        # INPUT: csv_filename         = Path and filename of a csv file defining parameters
-        #        wind_direction_array = np.array that contains wind directions to be computed
-        #        wind_speed_array     = np.array that contains wind speedsto be computed
-        # =============================================
-        
-        # read a csv file and put parameters into pandas dataframe 
-        # params_df = pd.read_csv(csv_filename, comment='$', names=('parameter', 'value') ) # '$' denotes commet out  
-        params_df = self.params_df
-        
-        # initialize arrays for landing location
-        self.loc_bal = np.zeros((len(wind_speed_array), len(wind_direction_array), 2) )  # for ballistic
-        self.loc_para = np.zeros((len(wind_speed_array), len(wind_direction_array), 2) ) # for parachute fall
-        
-        # keep initial parachute deployment definition
-        t_para_delay_original = params_df.loc[params_df.parameter == 't_para_delay', 'value'] 
-        t_deploy_original = params_df.loc[params_df.parameter == 't_deploy', 'value'] 
-        
-        # loop count initialization
-        i_speed = 0
-        i_angle = 0
-        
-        # loop over wind speed
-        for wind_speed in wind_speed_array:
-            # overwrite wind speed
-            params_df.loc[params_df.parameter == 'wind_speed', 'value'] = wind_speed
-            
-            # loop over wind direction
-            i_angle = 0
-            for wind_angle in wind_direction_array[:-1]:
-                # overwrite wind speed
-                params_df.loc[params_df.parameter == 'wind_direction', 'value'] = wind_angle
-                
-                # -----------------------------------
-                #  landing point for ballistic fall  
-                # -----------------------------------
-                # overwrite parachute opening delay time to inf.
-                params_df.loc[params_df.parameter == 't_para_delay', 'value'] = 1.e7
-                params_df.loc[params_df.parameter == 't_deploy', 'value'] = 1.e7
-                
-                # run a single trajectory simulation
-                self.run()
-                
-                # post-process and get landing location
-                self.postprocess('location')
-                self.loc_bal[i_speed,i_angle,:] = self.res['landing_loc']
-                
-                # ---------------------------------
-                # landing point for parachute fall
-                # ---------------------------------
-                # overwrite parachute opening delay time to 1s.
-                params_df.loc[params_df.parameter == 't_para_delay', 'value'] = t_para_delay_original
-                params_df.loc[params_df.parameter == 't_deploy', 'value'] = t_deploy_original
-                
-                # run main computation
-                self.run()
-
-                # post-process and get landing location
-                self.postprocess('location')
-                self.loc_para[i_speed,i_angle,:] = self.res['landing_loc']
-               
-                # loop count
-                i_angle += 1
-            #END FOR
-            
-            # loop count
-            i_speed += 1
-        # END FOR
-        
-        # close wind direction loop
-        self.loc_para[:,-1,:] = self.loc_para[:,0,:]
-        self.loc_bal[:,-1,:] = self.loc_bal[:,0,:]
-        
-        # record landing distribution
-        tmp_dict = {'wind_directions': wind_direction_array,
-                    'wind_speeds': wind_speed_array,
-                    'loc_parachute': self.loc_para,
-                    'loc_ballistic': self.loc_bal,
-                }
-        self.res.update({'landing_distribution':tmp_dict})
-        
-        self.plot_dist(wind_speed_array)
-        
-        return None
-        
+    
     
     """
     ----------------------------------------------------
@@ -856,7 +603,7 @@ class Rocket_simu():
             print('----------------------------')
         # END IF
         
-        return xloc, yloc
+        return None
         
         
     def get_flight_detail(self,time, show=False):
@@ -870,6 +617,9 @@ class Rocket_simu():
         p = np.zeros(n)
         rho = np.zeros(n)
         a = np.zeros(n)
+        # time array
+        time = self.trajectory.t 
+        
         
         for i in range(n):
             T[i],p[i],rho[i],a[i] = self.trajectory.standard_air(self.trajectory.solution[i,2])  # provide altitude=u[2]
@@ -889,7 +639,9 @@ class Rocket_simu():
         wind_vec = self.trajectory.wind(self.trajectory.solution[Q_max,2]*4.)  # provide altitude=u[2]
         wind_speed = np.linalg.norm(wind_vec)
         
+        # ------------------------------
         # record flight detail
+        # ------------------------------
         maxq_dict = {'max_Q' : 0.5*rho[Q_max]*speed[Q_max]**2.,  # max. dynamic pressure
                      'time'  : time[Q_max],                      # time
                      'free_stream_pressure': p[Q_max],
@@ -904,6 +656,7 @@ class Rocket_simu():
                     'total_flight_time': self.trajectory.landing_time,                       # total flight time
                     'max_Q_all'  : maxq_dict,
                     }
+        tmp_dict.update( self.trajectory.res_trajec_main )  # add results from trajectory
         self.res.update({'flight_detail' : tmp_dict})
         
         if show:
@@ -1090,6 +843,7 @@ class Rocket_simu():
         # END IF
         """
         
+        
         plt.figure(5)
         # p history 
         plt.plot(time,p,lw=1.5,label='omega_x')
@@ -1106,6 +860,8 @@ class Rocket_simu():
         #plt.show 
         
         return None
+    
+    """
     
     def plot_dist(self, wind_speed_array):
         # plot landing spot distribution
@@ -1171,5 +927,7 @@ class Rocket_simu():
         # plt.show
         
         return None
+        
+    """
           
         

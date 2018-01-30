@@ -27,8 +27,8 @@ rocket_height, 3.5
 rocket_diameter, 0.17
 $m_dry, 40.
 $m_prop, 31.5
-m_dry, 20.
-m_prop, 10.
+m_dry, 30.
+m_prop, 26.25
 CG_dry, 2.2
 CG_prop, 2.
 MOI_dry_x, 0.5007
@@ -60,8 +60,8 @@ $fin_dis, 3
 $
 $ numerical parameters
 $
-dt, 0.05
-t_max, 10000.
+dt, 0.01
+t_max, 40000.
 
 $              
 $ launch parameters
@@ -83,7 +83,7 @@ thrust_input_type,time_curve
 $ thrust_dt, 0.00076
 $ thrust_filename,umich_thrust.csv
 thrust_filename,thrust_1000N_10s.csv
-thrust_mag_factor, 1.
+thrust_mag_factor, 2.5
 time_mag_factor, 1.5
 
 $
