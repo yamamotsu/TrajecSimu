@@ -6,7 +6,6 @@ Created on Sat Jul  8 22:23:48 2017
 
 @author: shugo
 """
-
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
