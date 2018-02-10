@@ -26,16 +26,16 @@ mysim = TrajecSimu_UI(csv_filename)
 # ------------------------------------
 # run a single trajectory computation 
 # ------------------------------------
-mysim.run_single()
+# mysim.run_single()
 
 # ------------------------------------
 # run a loop for landing point distribution
 # ------------------------------------
-# run_loop(n_winddirec, max_windspeed, windspeed_step)
-# n_winddirec: number of wind directions 
-# max_windspeed: max. wind speed [m/s]
-# windspeed_step: wind speed step [m/s]
-# mysim.run_loop(8, 7, 2)
+# format: run_loop(n_winddirec, max_windspeed, windspeed_step)
+#         n_winddirec: number of wind directions 
+#         max_windspeed: max. wind speed [m/s]
+#         windspeed_step: wind speed step [m/s]
+mysim.run_loop(8, 8, 1)
 
 
 # ------------------------------------

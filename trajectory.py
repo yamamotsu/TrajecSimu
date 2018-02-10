@@ -627,7 +627,7 @@ class trajec_main(Rocket):
         moment_all = np.cross( np.array([CG-self.CP_body,0.,0.]) , force_all )
         
         # add aerodynamic damping effect  (note: Cm_omega < 0)
-        moment_all += 0.25 * rho * air_speed * self.X_area * self.Cm_omega_bar * omega
+        moment_all += 0.25 * rho * air_speed * self.Cm_omega_bar * omega
         
         if self.aero_fin_mode == 'indiv':
             # ----------------------------------
@@ -906,24 +906,9 @@ class trajec_main(Rocket):
             # lift coefficient slope for fin-body individual computations
             #  : slope for body Cl
             k1 = 1.
-        else:
-            # lift coefficient slope for fin-body integrated computations
-            # k1 = 15.0
-            k1 = 5.8
-            
         # END IF
-        Cl = k1 * alpha 
+        Cl = self.Cl_alpha * np.sin(2.*alpha)
         
-        """
-        #
-        AoA_sep = 15.  # AoA at when flow separation occurs
-        if alpha > AoA_sep*np.pi/180.:
-            # if AoA is larger than 15 deg, assume separation and loss of Cl
-            Cl_sep = k1 * AoA_sep*np.pi/180. # Cl at alpha=15 
-            A = 0.1
-            Cl = Cl_sep * np.exp( -A*( alpha-AoA_sep*np.pi/180. ) )
-        #END IF
-        """
         
         # -------------------
         # Drag Coefficient
@@ -939,8 +924,8 @@ class trajec_main(Rocket):
         Cd0 *= self.Cd0/0.7
         
         # drag coefficient "amplitude" for cosign curve fit
-        Cd_bar = 8.
-        Cd = Cd0 + Cd_bar*( np.cos(2*alpha + np.pi) +1. )
+        Cd_bar = 15.
+        Cd = Cd0 + Cd_bar*( np.cos(2*alpha + np.pi) +1.)
         
         return Cd, Cl
         

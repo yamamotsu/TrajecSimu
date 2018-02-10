@@ -10,11 +10,14 @@ import numpy as np
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+from PIL import Image
 from mpl_toolkits.mplot3d import Axes3D
 from scipy import fftpack, interpolate, integrate, optimize
 import pandas as pd
 import subprocess
 from Rocket_simu import Rocket
+from postprocess_plot import PostProcess_dist, JudgeInside
+
 # User Interface for 
 
 class TrajecSimu_UI():
@@ -29,7 +32,6 @@ class TrajecSimu_UI():
         # create an instance 
         # provide csv file name that contains parameters
         self.myrocket = Rocket(csv_filename)
-
 
 
     def run_single(self):
@@ -77,6 +79,7 @@ class TrajecSimu_UI():
         # initialize array for parameter update
         params_update = np.array([ ['wind_speed', 0.], ['wind_direction', 0.], ['t_para_delay', 0.], ['t_deploy', 0.] ])
         
+        # """
         # --------------------
         # loop
         # --------------------
@@ -109,10 +112,8 @@ class TrajecSimu_UI():
                 self.myrocket.postprocess('maxval')
                 # record landing location
                 self.record_loop_result('bal', i_speed,i_angle)
-                # record other flight detail 
-                self.record_loop_result('vals', i_speed,i_angle)
                 
-                #"""
+                #
                 # ---------------------------------
                 # landing point for parachute fall
                 # ---------------------------------
@@ -128,7 +129,9 @@ class TrajecSimu_UI():
                 self.myrocket.postprocess('maxval')
                 # record results
                 self.record_loop_result('para', i_speed,i_angle)
-                #"""
+                # record other flight detail 
+                self.record_loop_result('vals', i_speed,i_angle)
+                #
                 
                 # loop count
                 i_angle += 1
@@ -139,16 +142,86 @@ class TrajecSimu_UI():
         # END FOR
         
         # close wind direction loop
-        self.loc_para[:,-1,:] = self.loc_para[:,0,:]
         self.loc_bal[:,-1,:] = self.loc_bal[:,0,:]
+        self.loc_para[:,-1,:] = self.loc_para[:,0,:]
         
+        # """
+        
+        """
+        tmpx = np.array([ [0., 100., 200., 100. ,0],  [0., 200., 400., 200. ,0], [0., 50., 100., 50. ,0] ] )
+        tmpy = np.array([ [0., 100., 0., -100. ,0],   [0., 200., 0., -200. ,0],  [0., 50., 0., -50. ,0] ])
+        self.loc_bal = np.dstack( (tmpx, tmpy) )
+        self.loc_para = np.dstack( (tmpx, tmpy) )
+        """
+        
+        # -------------------------------
+        #  plot
+        # -------------------------------
+        mypost = PostProcess_dist()
+        elev_angle = self.myrocket.trajectory.elev_angle  # launcher elev angle        
+        mypost.plot_sct(self.loc_bal,  wind_speed_array, elev_angle, 'Ballistic')
+        mypost.plot_sct(self.loc_para, wind_speed_array, elev_angle, 'Parachute')
+        
+        # -------------------------------
+        # judge ballistic landing points 
+        # -------------------------------
+        tmp_centers = np.array([mypost.xy_rail, mypost.xy_switch, mypost.xy_tent])
+        # create instance
+        autojudge_bal = JudgeInside(mypost.xy_range, tmp_centers)
+        # initialize array for result
+        self.res_bal = np.ones( (self.loc_bal.shape[0], self.loc_bal.shape[1]-1) ) * False  
+        # loop over wind speed
+        for j in range(self.loc_bal.shape[0]):
+            # loop over wind direction
+            for i in range(self.loc_bal.shape[1]-1):
+                if autojudge_bal.judge_inside(self.loc_bal[j, i, :]):
+                    #if true, Go for launch
+                    self.res_bal[j][i] = True
+                # END IF 
+            # END IF
+        # END IF
+        
+        # -------------------------------
+        # judge parachute landing points 
+        # -------------------------------
+        # create instance
+        autojudge_para = JudgeInside(mypost.xy_range)
+        # initialize array for result
+        self.res_para = np.ones( (self.loc_para.shape[0], self.loc_para.shape[1]-1) ) * False  
+        # loop over wind speed
+        for j in range(self.loc_para.shape[0]):
+            # loop over wind direction
+            for i in range(self.loc_para.shape[1]-1):
+                if autojudge_para.judge_inside(self.loc_para[j, i, :]):
+                    #if true, Go for launch
+                    self.res_para[j][i] = True
+                # END IF 
+            # END IF
+        # END IF              
+        
+        # ------------------------
+        # judge both at once
+        # ------------------------
+        self.list_res_both = [ ['NoGo' for i in range(self.loc_bal.shape[1]-1)] for j in range(self.loc_bal.shape[0])] 
+        # loop over wind speed
+        for j in range(self.loc_para.shape[0]):
+            # loop over wind direction
+            for i in range(self.loc_para.shape[1]-1):
+                # Go if both cases are go
+                if np.logical_and(self.res_bal[j][i], self.res_para[j][i]):
+                    self.list_res_both[j][i] = elev_angle
+                    
+                # END IF 
+            # END IF 
+        # END IF
+        
+        # ------------------------------
         # save information to excel file
+        # ------------------------------
         self.output_loop_result(wind_speed_array, wind_direction_array)
         
-        # plot
-        self.plot_dist(wind_speed_array)
-        
         return None
+    
     
     def record_loop_result(self, record_type, i_speed, i_angle):
         # =============================================
@@ -182,31 +255,41 @@ class TrajecSimu_UI():
     
     def output_loop_result(self,wind_speed_array, wind_direction_array):
         # convert np.arrays into pandas dataframes
-        loc_x_bal      = pd.DataFrame(self.loc_bal[:,:,0], index = wind_speed_array, columns = wind_direction_array)
-        loc_y_bal      = pd.DataFrame(self.loc_bal[:,:,1], index = wind_speed_array, columns = wind_direction_array)
-        loc_x_para     = pd.DataFrame(self.loc_para[:,:,0], index = wind_speed_array, columns = wind_direction_array)
-        loc_y_para     = pd.DataFrame(self.loc_para[:,:,1], index = wind_speed_array, columns = wind_direction_array)
-        max_alt        = pd.DataFrame(self.max_alt, index = wind_speed_array, columns = wind_direction_array)
-        max_vel        = pd.DataFrame(self.max_vel, index = wind_speed_array, columns = wind_direction_array)
-        max_Mach       = pd.DataFrame(self.max_Mach, index = wind_speed_array, columns = wind_direction_array)
-        max_Q          = pd.DataFrame(self.max_Q, index = wind_speed_array, columns = wind_direction_array)
-        v_launch_clear = pd.DataFrame(self.v_launch_clear, index = wind_speed_array, columns = wind_direction_array)
-        v_para_deploy  = pd.DataFrame(self.v_para_deploy, index = wind_speed_array, columns = wind_direction_array)
+        ws = wind_speed_array
+        wd = wind_direction_array
+        loc_x_bal      = pd.DataFrame(self.loc_bal[:,:,0], index = ws, columns = wd)
+        loc_y_bal      = pd.DataFrame(self.loc_bal[:,:,1], index = ws, columns = wd)
+        loc_x_para     = pd.DataFrame(self.loc_para[:,:,0], index = ws, columns = wd)
+        loc_y_para     = pd.DataFrame(self.loc_para[:,:,1], index = ws, columns = wd)
+        max_alt        = pd.DataFrame(self.max_alt[:,:-1], index = ws, columns = wd[:-1])
+        max_vel        = pd.DataFrame(self.max_vel[:,:-1], index = ws, columns = wd[:-1])
+        max_Mach       = pd.DataFrame(self.max_Mach[:,:-1], index = ws, columns = wd[:-1])
+        max_Q          = pd.DataFrame(self.max_Q[:,:-1], index = ws, columns = wd[:-1])
+        v_launch_clear = pd.DataFrame(self.v_launch_clear[:,:-1], index = ws, columns = wd[:-1])
+        v_para_deploy  = pd.DataFrame(self.v_para_deploy[:,:-1], index = ws, columns = wd[:-1])
+        bal_judge      = pd.DataFrame(self.res_bal, index = ws, columns = wd[:-1])
+        para_judge     = pd.DataFrame(self.res_para, index = ws, columns = wd[:-1])
+        judge_both     = pd.DataFrame(self.list_res_both, index = ws, columns = wd[:-1])
+        
         
         # define output file name
-        excel_file = pd.ExcelWriter('output.xlsx')
+        output_name = 'output_' + str(int(self.myrocket.trajectory.elev_angle)) + 'deg.xlsx'
+        excel_file = pd.ExcelWriter(output_name)
  
         # write dataframe with sheet name
-        max_alt.to_excel(excel_file, '最高高度')
-        max_vel.to_excel(excel_file, '最高速度 m_s')
+        judge_both.to_excel(excel_file, 'Go-NoGo判定 ')
+        max_alt.to_excel(excel_file, '最高高度 ')
+        max_vel.to_excel(excel_file, '最高速度 ')
         max_Mach.to_excel(excel_file, '最大マッハ数')
-        v_launch_clear.to_excel(excel_file, 'ランチクリア速度')
-        v_para_deploy.to_excel(excel_file, 'パラ展開時速度')
-        max_Q.to_excel(excel_file, '最大動圧 Pa')
-        loc_x_bal.to_excel(excel_file, '弾道x')
-        loc_y_bal.to_excel(excel_file, '弾道y')
-        loc_x_para.to_excel(excel_file, 'パラx')
-        loc_y_para.to_excel(excel_file, 'パラy')
+        v_launch_clear.to_excel(excel_file, 'ランチクリア速度 ')
+        v_para_deploy.to_excel(excel_file, 'パラ展開時速度 ')
+        max_Q.to_excel(excel_file, '最大動圧 ')
+        loc_x_bal.to_excel(excel_file, '弾道 x ')
+        loc_y_bal.to_excel(excel_file, '弾道 y ')
+        loc_x_para.to_excel(excel_file, 'パラ x ')
+        loc_y_para.to_excel(excel_file, 'パラ y ')
+        bal_judge.to_excel(excel_file, '弾道判定 ')
+        para_judge.to_excel(excel_file, 'パラ判定 ')
         
         # 書き出した内容を保存する
         excel_file.save()
@@ -455,3 +538,4 @@ class TrajecSimu_UI():
         
         return None
     
+        

@@ -98,7 +98,8 @@ class Rocket():
                             'aero_fin_mode'    : 'integ',  # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
                             'Cd0'              : 0.6,      # drag coefficient at Mach 0.1, AoA = 0deg
                             'Cmp'              : -0.,      # stability derivative of rolling moment coefficient (aerodynamic damping)
-                            'Cmq'              : -10.,     # stability derivative of pitching/yawing moment coefficient (aerodynamic damping)
+                            'Cmq'              : -3.3,     # stability derivative of pitching/yawing moment coefficient (aerodynamic damping)
+                            'Cl_alpha'         : 10.,      # lift slope for small AoA
 
                             # -----------------------------
                             # rocket engine parameters
@@ -204,11 +205,15 @@ class Rocket():
             self.CP_body = float( self.params_dict['CP_body'] )  # CP location without fins (budy tube+nose) (nose tip = 0)
             self.Cd0 = float( self.params_dict['Cd0'] )          # total 0 angle-of-attack drag coefficient
             self.X_area = np.pi*rocket_diameter**2. /4.  # cross-sectional area
+            self.Cl_alpha = float( self.params_dict['Cl_alpha'] )   
+            
             self.aero_fin_mode = self.params_dict['aero_fin_mode'].strip()  # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
             
-            # aerodynamic damping moment coefficient
+            # aerodynamic damping moment coefficient]
+            # non_dimensional
             Cm_omega = np.array([ float(self.params_dict['Cmp']), float(self.params_dict['Cmq']), float(self.params_dict['Cmq']) ]) 
-            self.Cm_omega_bar = Cm_omega * np.array([rocket_diameter, rocket_height, rocket_height])**2.   # multiply with length^2. no longer non-dimansional
+            # Cm_omega_bar = Cm_omega * l^2 * S
+            self.Cm_omega_bar = Cm_omega * np.array([rocket_diameter, rocket_height, rocket_height])**2. * self.X_area # multiply with length^2. no longer non-dimansional
             
             if self.aero_fin_mode == 'indiv':
                 # for individual fin computation, define fin parameters here
