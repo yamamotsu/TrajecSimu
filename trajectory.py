@@ -868,6 +868,56 @@ class trajec_main(Rocket):
             #pressure
             p = p32 * (T/T32)**(-g/(gamma*R)) #[Pa] 
             
+        elif h <= 51.*10**3:
+            # *** Stratopause ***
+            # temp, pressure at 47km alt.
+            T,p47,_,_ = self.standard_air(47000.)
+            # pressure 
+            p = p47 * np.exp( (-g/(R*T)) * (h-47000.) )
+        
+        elif h <= 71.*10**3:
+            # *** Mesosphere 1 ***
+            # temp, pressure at 51km alt.
+            T51,p51,_,_ = self.standard_air(51000.)
+            # temperature lapse rate
+            gamma = -0.0028
+            # temperature 
+            T = T51 + gamma * (h-51000.) # [K]
+            #pressure
+            p = p51 * (T/T51)**(-g/(gamma*R)) #[Pa] 
+            
+        elif h <= 85.*10**3:
+            # *** Mesosphere 2 ***
+            # temp, pressure at 51km alt.
+            T71,p71,_,_ = self.standard_air(71000.)
+            # temperature lapse rate
+            gamma = -0.002
+            # temperature 
+            T = T71 + gamma * (h-71000.) # [K]
+            #pressure
+            p = p71 * (T/T71)**(-g/(gamma*R)) #[Pa] 
+            
+        elif h <= 90.*10**3:
+            # *** Mesopause ***
+            # temp, pressure at 47km alt.
+            T,p85,_,_ = self.standard_air(85000.)
+            # pressure 
+            p = p85 * np.exp( (-g/(R*T)) * (h-85000.) )
+            
+        elif h <= 110.*10**3:
+            # *** Thermosphere  ***
+            # temp, pressure at 51km alt.
+            T90,p90,_,_ = self.standard_air(90000.)
+            # temperature lapse rate
+            gamma = 0.0026675
+            # temperature 
+            T = T90 + gamma * (h-90000.) # [K]
+            #pressure
+            p = p90 * (T/T90)**(-g/(gamma*R)) #[Pa] 
+            
+        else:
+            T110,p110,_,_ = self.standard_air(110000.)
+            
         #END IF
         
             
@@ -889,7 +939,7 @@ class trajec_main(Rocket):
         # ==============================================
         
         # wind velocity in local fixed coordinate
-        wind_vec = self.wind_unitvec * self.wind_speed * (h/10.)**self.Cwind  
+        wind_vec = self.wind_unitvec * self.wind_speed * (h/self.wind_alt_std)**self.Cwind  
 
         return wind_vec
         

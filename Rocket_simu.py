@@ -73,7 +73,7 @@ class Rocket():
                             # numerical executive parameters
                             # -----------------------------
                             'dt'       : 0.05,          # time step [s]
-                            't_max'    : 20*60,         # maximum time [s]
+                            't_max'    : 100*60,         # maximum time [s]
                             'N_record' : 500,           # record history every N_record iteration
                             'integ' : 'lsoda_odeint',   # time integration scheme       
                         
@@ -88,9 +88,10 @@ class Rocket():
                             'T0'             : 288.,    # temperature at 10m altitude [K] 
                             'p0'             : 1.013e5, # pressure  at 10m alt. [Pa]
                             # wind property
-                            'wind_direction' : 0.,      # azimuth where wind is blowing from 
-                            'wind_speed'     : 4.,      # wind speed at 10m alt. [m/s] 
-                            'Cwind'          : 1./6.0,  # wind model power coefficient 
+                            'wind_direction'   : 0.,      # azimuth where wind is blowing from 
+                            'wind_speed'       : 4.,      # wind speed at 'wind_alt_std' alt. [m/s] 
+                            'wind_power_coeff' : 7.,
+                            'wind_alt_std'     : 10.,      # alt. at which the wind speed is given [m]
     
                             # -----------------------------
                             # rocket aerodynamic parameters
@@ -98,7 +99,7 @@ class Rocket():
                             'aero_fin_mode'    : 'integ',  # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
                             'Cd0'              : 0.6,      # drag coefficient at Mach 0.1, AoA = 0deg
                             'Cmp'              : -0.,      # stability derivative of rolling moment coefficient (aerodynamic damping)
-                            'Cmq'              : -3.3,     # stability derivative of pitching/yawing moment coefficient (aerodynamic damping)
+                            'Cmq'              : -3.,     # stability derivative of pitching/yawing moment coefficient (aerodynamic damping)
                             'Cl_alpha'         : 10.,      # lift slope for small AoA
 
                             # -----------------------------
@@ -168,8 +169,8 @@ class Rocket():
             angle_wind = (-wind_direction + 90.) * np.pi/180.    # angle to which wind goes (x orients east, y orients north)
             self.wind_unitvec = -np.array([np.cos(angle_wind), np.sin(angle_wind) ,0.])
             self.wind_speed = float( self.params_dict['wind_speed'] )         # speed of wind [m/s] at 10m alt.
-            self.Cwind = float( self.params_dict['Cwind'] )                   # wind coefficient
-            
+            self.Cwind = 1./float( self.params_dict['wind_power_coeff'] )   # wind power coefficient
+            self.wind_alt_std = float( self.params_dict['wind_alt_std'])
             # earth gravity
             self.grav = np.array([0.,0.,-9.81])    # in fixed coordinate
             
@@ -202,7 +203,12 @@ class Rocket():
             rocket_height = float(self.params_dict['rocket_height'] ) # height of rocket
             rocket_diameter = float(self.params_dict['rocket_diameter'] ) # height of rocket
             
-            self.CP_body = float( self.params_dict['CP_body'] )  # CP location without fins (budy tube+nose) (nose tip = 0)
+            try:
+                self.CP_body = float( self.params_dict['CP_body'] )  # CP location without fins (budy tube+nose) (nose tip = 0)
+            except:
+                # default CP: 15%Fst
+                self.CP_body = self.CG_dry + 0.15*rocket_height
+                
             self.Cd0 = float( self.params_dict['Cd0'] )          # total 0 angle-of-attack drag coefficient
             self.X_area = np.pi*rocket_diameter**2. /4.  # cross-sectional area
             self.Cl_alpha = float( self.params_dict['Cl_alpha'] )   

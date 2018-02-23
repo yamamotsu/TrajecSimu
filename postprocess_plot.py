@@ -11,6 +11,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import matplotlib.cm as cm
 from PIL import Image
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -169,12 +170,15 @@ class PostProcess_dist():
     
         title_name = fall_type + ", Launcher elev. " + str(int(launcher_elev_angle)) + " deg"
     
-        for i in range(len(wind_speed_array)):
+    
+        imax = len(wind_speed_array)
+        for i in range(imax):
     
             # cmap = plt.get_cmap("winter")
     
             labelname = str(wind_speed_array[i]) + " m/s"
-            plt.plot(drop_point[i,:,0],drop_point[i,:,1], label = labelname, linewidth=2)
+            plt.plot(drop_point[i,:,0],drop_point[i,:,1], label = labelname, linewidth=2, color=cm.Oranges(i/imax))
+            
             
         # output_name = "output/Figure_elev_" + str(int(rail_elev)) + ".png"
         output_name = 'Figure_' + fall_type + '_elev' + str(int(launcher_elev_angle)) + 'deg.eps'
