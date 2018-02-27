@@ -14,11 +14,6 @@ from UI_landingdist import TrajecSimu_UI
 
 # define path and filename of a csv file
 csv_filename = 'Parameters_csv/2018izu/relenza_ntk.csv'
-# csv_filename = 'Parameters_csv/newmitei_parameters_C63.csv'
-# csv_filename = 'Parameters_csv/2018noshiro/felix_2018noshiro.csv'
-# csv_filename = 'Parameters_csv/2016izu/2016M_parameters.csv'
-# csv_filename = 'Parameters_csv/reference/hyend_parameters.csv'
-# csv_filename = 'Parameters_csv/2018noshiro/felix_2018noshiro_ver122517.csv'
 
 # create an instance
 mysim = TrajecSimu_UI(csv_filename)
@@ -26,7 +21,7 @@ mysim = TrajecSimu_UI(csv_filename)
 # ------------------------------------
 # run a single trajectory computation 
 # ------------------------------------
-# mysim.run_single()
+mysim.run_single()
 
 # ------------------------------------
 # run a loop for landing point distribution
@@ -35,8 +30,7 @@ mysim = TrajecSimu_UI(csv_filename)
 #         n_winddirec: number of wind directions 
 #         max_windspeed: max. wind speed [m/s]
 #         windspeed_step: wind speed step [m/s]
-mysim.run_loop(8, 8, 1)
-
+# mysim.run_loop(8, 8, 1)
 
 # ------------------------------------
 # run an optimization problem

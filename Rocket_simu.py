@@ -325,9 +325,10 @@ class Rocket():
             # input thrust curve from csv file
             
             # path to csv (hardcoded)
-            PATH_to_csv = 'Thrust_curve_csv'
+            #PATH_to_csv = 'Thrust_curve_csv'
             # filename with path
-            filename = PATH_to_csv + '/' + self.thrust_filename
+            #filename = PATH_to_csv + '/' + self.thrust_filename
+            filename = self.thrust_filename
             # read csv file
             input_raw = np.array( pd.read_csv(filename, header=None) ) 
             
@@ -548,12 +549,16 @@ class Rocket():
         # =============================================
         
         # engine properties
+        
+        # compute Isp
+        Isp = self.trajectory.Impulse_total / (self.trajectory.m_prop * 9.81)
             
         # record engine property
         tmp_dict = {'total_impulse  ': self.trajectory.Impulse_total, 
                     'max_thrust'     : self.trajectory.Thrust_max,
                     'average_thrust' : self.trajectory.Thrust_avg,
                     'burn_time'      : self.trajectory.t_MECO,
+                    'Isp'            : Isp
                 }
         self.res.update({'engine' : tmp_dict})
 
@@ -570,6 +575,7 @@ class Rocket():
             print(' burn time: ', self.trajectory.t_MECO, '[s]')
             print(' max. thrust: ', self.trajectory.Thrust_max, '[N]')
             print(' average thrust: ', self.trajectory.Thrust_avg, '[N]')
+            print(' specific impulse: ', Isp, '[s]' )
             print('--------------------')
             # plot filtered thrust curve
             fig = plt.figure(1)
