@@ -13,7 +13,9 @@ import numpy as np
 from UI_landingdist import TrajecSimu_UI
 
 # define path and filename of a csv file
-csv_filename = 'Parameters_csv/2018izu/relenza_ntk.csv'
+# csv_filename = 'Parameters_csv/2018izu/2018izu_ver0306.csv'
+# csv_filename = 'Parameters_csv/model_rocket/newjess.csv'
+csv_filename = 'Parameters_csv/2018noshiro/felix_2018noshiro_verMarch.csv'
 
 # create an instance
 mysim = TrajecSimu_UI(csv_filename)
@@ -21,7 +23,7 @@ mysim = TrajecSimu_UI(csv_filename)
 # ------------------------------------
 # run a single trajectory computation 
 # ------------------------------------
-mysim.run_single()
+# mysim.run_single()
 
 # ------------------------------------
 # run a loop for landing point distribution
@@ -30,7 +32,7 @@ mysim.run_single()
 #         n_winddirec: number of wind directions 
 #         max_windspeed: max. wind speed [m/s]
 #         windspeed_step: wind speed step [m/s]
-# mysim.run_loop(8, 8, 1)
+mysim.run_loop(16, 8, 1)
 
 # ------------------------------------
 # run an optimization problem

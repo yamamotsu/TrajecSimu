@@ -58,8 +58,8 @@ class Rocket():
         # =============================================
         
         # loop over parameters in params
-        for i in range(params.shape[0]):
-            self.params_df.loc[self.params_df.parameter == params[i,0], 'value'] = params[i,1]
+        for i in range(len(params)):
+            self.params_df.loc[self.params_df.parameter == params[i][0], 'value'] = params[i][1]
         # END FOR
         
         return None
@@ -84,6 +84,9 @@ class Rocket():
                             'elev_angle'     : 89.,     # angle of elevation [deg]
                             'azimuth'        : 0.,      # north=0, east=90, south=180, west=270 [deg]
                             'rail_length'    : 5.,      # length of launcher rail
+                            # launch point configuration
+                            'latitude'       : 35.,      # latitude of launch point [deg]
+                                
                             # atmosphere property
                             'T0'             : 288.,    # temperature at 10m altitude [K] 
                             'p0'             : 1.013e5, # pressure  at 10m alt. [Pa]
@@ -92,6 +95,7 @@ class Rocket():
                             'wind_speed'       : 4.,      # wind speed at 'wind_alt_std' alt. [m/s] 
                             'wind_power_coeff' : 7.,
                             'wind_alt_std'     : 10.,      # alt. at which the wind speed is given [m]
+                            
     
                             # -----------------------------
                             # rocket aerodynamic parameters
@@ -160,6 +164,9 @@ class Rocket():
             self.azimuth = float( self.params_dict['azimuth'] )               # north=0, east=90, south=180, west=270 [deg]
             self.rail_height = rail_length * np.sin(self.elev_angle * np.pi/180.) # height of launch rail in fixed coord.
     
+            # launch point property
+            self.omega_earth = np.array([0., 0., -7.29e-5*np.sin( np.pi/180. * float(self.params_dict['latitude'])) ])
+            
             # atmosphere property
             self.T0 = float( self.params_dict['T0'] )  # temperature [K] at 10m alt.
             self.p0 = float( self.params_dict['p0'] )  # pressure [Pa] at 10m alt.
@@ -238,10 +245,7 @@ class Rocket():
             # display error message
             print('Error in aerodynamic property parameters')
             sys.exit()
-        
-        # -----------------------------
-        # engine property
-        # -----------------------------
+            
         try:
             self.thrust_input_type = self.params_dict['thrust_input_type'].strip() 
             self.thrust_mag_factor = float(self.params_dict['thrust_mag_factor'] )
@@ -311,8 +315,8 @@ class Rocket():
         #
         # =============================================
         
-        thrust_factor = 1.
-        time_factor = 1.
+        # thrust_factor = 1.
+        # time_factor = 1.
         
         if self.thrust_input_type == 'rectangle':
             # rectangle thrust input (constant thrust * burn time)
@@ -759,6 +763,7 @@ class Rocket():
         ax.set_ylabel('y')
         ax.set_zlabel('z')
         ax.set_title('Trajectory')
+        ax.patch.set_alpha(0.9) 
         ax.legend()
         # ax.set_aspect('equal')
         #.show()

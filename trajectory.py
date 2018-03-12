@@ -307,6 +307,7 @@ class trajec_main(Rocket):
             print(' ')
             # record landing time
             self.landing_time = t
+            self.res_trajec_main.update( {'landing_time' : t } )
             
             # record history
             self.add_backup(t,u)
@@ -359,16 +360,16 @@ class trajec_main(Rocket):
         elif self.flag == 2:
             # thrust ON
             # total acceleration 
-            dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.grav) + (aeroF + self.thrust(t)) / mass
+            dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.grav) + self.Coriolis(v, Tbl) + (aeroF + self.thrust(t)) / mass
             
         elif self.flag == 3 or self.flag == 5:
             # coasting phase
             # total acceleration 
-            dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.grav) + aeroF / mass
+            dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.grav) + self.Coriolis(v, Tbl) + aeroF / mass
 
         elif self.flag == 4:
             # parachute deployed
-            dv_dt = np.dot(Tbl, self.grav) + self.parachute_F(x,v,Tbl) / mass
+            dv_dt = np.dot(Tbl, self.grav) + self.Coriolis(v, Tbl) + self.parachute_F(x,v,Tbl) / mass
         #END IF
         
         
@@ -511,6 +512,19 @@ class trajec_main(Rocket):
             return mass, MOI, d_dt_MOI, CG
         #END IF
                 
+    def Coriolis(self, v, Tbl):
+        # =======================================
+        # computes Coriolis force per unit mass
+        # 
+        # INPUT:  v = velocity in body coord.
+        #         Tbl = tranformation matrix from local coord. to body coord.
+        # OUTPUT: Fcor = Coriolis force vector in body coord.
+        # =======================================
+        
+        # Coriolis  force in body coord. note that self.omega_earth, omega of earth-spin, is given in local coord.
+        Fcor = 2. * np.cross( (Tbl@self.omega_earth), v )
+        
+        return Fcor
     
     def thrust(self,t):
         # =======================================
@@ -644,6 +658,15 @@ class trajec_main(Rocket):
             moment_all += moment_fin
         # END IF 
         
+        """
+        F_fill_1d = 0.5 * rho * air_speed**2. * 0.03*0.1 * 0.7
+        F_fill = np.array([-F_fill_1d, 0., 0.])
+        F_fill_mom = np.cross( np.array([0.,0.13, 0.]), F_fill)
+        
+        force_all += F_fill
+        moment_all += F_fill_mom
+        """
+        
         return force_all, moment_all
         
     def fin_aero(self,v_air,omega_x,rho):
@@ -739,7 +762,6 @@ class trajec_main(Rocket):
         
         # total moment of fin3
         m3 = np.array([np.sum(rollmoment3),np.sum(pitchmoment3),0.])
-        
         
         # --------------------
         #    fin4: y=0, z<0

@@ -1,0 +1,9 @@
+*.pyc
+*.xlsx
+tanecon_optimization.py
+Archive/
+Parameters_csv/
+Thrust_curve_csv/
+*.eps
+*.png
+*.xlsx

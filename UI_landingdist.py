@@ -77,7 +77,7 @@ class TrajecSimu_UI():
         self.v_para_deploy  = np.zeros((n1, n2))       # parachute deploy air speed
           
         # initialize array for parameter update
-        params_update = np.array([ ['wind_speed', 0.], ['wind_direction', 0.], ['t_para_delay', 0.], ['t_deploy', 0.] ])
+        params_update = [ ['wind_speed', 0.], ['wind_direction', 0.], ['t_para_delay', 0.], ['t_deploy', 0.] ]
         
         # """
         # --------------------
@@ -89,20 +89,20 @@ class TrajecSimu_UI():
         # loop over wind speed
         for wind_speed in wind_speed_array:
             # overwrite wind speed
-            params_update[0,1] = wind_speed
+            params_update[0][1] = wind_speed
             
             # loop over wind direction
             i_angle = 0
             for wind_angle in wind_direction_array[:-1]:
                 # overwrite wind speed
-                params_update[1,1] = wind_angle
+                params_update[1][1] = wind_angle
                 
                 # -----------------------------------
                 #  landing point for ballistic fall  
                 # -----------------------------------
                 # overwrite parachute opening delay time to inf.
-                params_update[2,1] = 1.e7
-                params_update[3,1] = 1.e7
+                params_update[2][1] = 1.e7
+                params_update[3][1] = 1.e7
                 
                 # overwrite parameters
                 self.myrocket.overwrite_dataframe(params_update)
@@ -118,8 +118,8 @@ class TrajecSimu_UI():
                 # landing point for parachute fall
                 # ---------------------------------
                 # overwrite parachute opening delay time to 1s.
-                params_update[2,1] = t_para_delay_original
-                params_update[3,1] = t_deploy_original
+                params_update[2][1] = t_para_delay_original
+                params_update[3][1] = t_deploy_original
                 
                 # overwrite parameters
                 self.myrocket.overwrite_dataframe(params_update)
