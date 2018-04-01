@@ -198,12 +198,20 @@ class trajec_main(Rocket):
         #        u    = state vector u (13*1)
         #
         # NOTE:  self.flag = 0 before ignition
-        #                    1 : launch rail
-        #                    2 : thrusted flight
-        #                    3 : inertial flight
-        #                    4 : parachute deployed
-        #                    5 : landed
+        #                    1   : on launch rail
+        #                    2   : thrusted flight
+        #                    3   : inertial flight
+        #                    3.5 : drogue chute deployed, before main para deployment
+        #                    4   : main parachute deployed
+        #                    5   : landed
         # =======================================
+
+        # **************************************************
+        # **************************************************
+        # altitude at which main parachute will be deployed
+        alt_2nd_deploy = 50.  # [m]
+        # **************************************************
+        # **************************************************
         
         # if the rocket has already landed, return 0
         if self.flag == 5:
@@ -271,15 +279,15 @@ class trajec_main(Rocket):
             
             # record history
             self.add_backup(t,u)
-            # switch into inertial flight
+            # switch into coasting flight
             self.flag = 3   
             
         elif self.flag==3 and t >= self.t_deploy:
-            # detect parachute deployment
+            # detect 1st parachute deployment
             # air speed
             air_speed = np.linalg.norm( -v + np.dot( Tbl,self.wind(x[2]) ) ) 
             print('----------------------------')
-            print('  Parachute deployed at t = ', t, '[s]')
+            print('  1st parachute deployed at t = ', t, '[s]')
             print('  current altitude: ', x[2], '[m]')
             print('  ground speed:    ', np.linalg.norm(v), '[m/s]')
             print('  true air speed: ', air_speed, '[m/s]')
@@ -290,11 +298,43 @@ class trajec_main(Rocket):
             self.add_backup(t,u)
             # record parachute deploy air speed
             self.res_trajec_main.update( {'v_para_deploy' : air_speed } )
+            
             # switch into parachute fall
-            self.flag = 4  
+            if self.flag_2ndpara:
+                # when two stage separation is True
+                self.flag = 3.5  #flag: drogue chute deployed
+            else:
+                self.flag = 4   # flag: main chute deployed
             
             # stop rotation
             omega = np.zeros(3)  
+            
+        # elif self.flag==3.5 and (t >= self.t_deploy_2 or 高度が規定値以下) :
+        elif self.flag==3.5 and t >= self.t_deploy_2:
+
+            
+
+            # detect 2nd parachute deployment
+            # air speed
+            air_speed = np.linalg.norm( -v + np.dot( Tbl,self.wind(x[2]) ) ) 
+            print('----------------------------')
+            print('  2nd parachute deployed at t = ', t, '[s]')
+            print('  current altitude: ', x[2], '[m]')
+            print('  ground speed:    ', np.linalg.norm(v), '[m/s]')
+            print('  true air speed: ', air_speed, '[m/s]')
+            print('----------------------------')
+            print(' ')
+            
+            # overwrite parachute properties with 2nd para
+            self.Cd_para = self.Cd_para_2
+            self.S_para = self.S_para_2
+            
+            # record history
+            self.add_backup(t,u)
+            
+            # switch into main parachute fall
+            self.flag = 4
+        
             
         elif self.flag > 1 and self.flag < 5 and x[2] < 0. :
             # detect landing
@@ -311,7 +351,7 @@ class trajec_main(Rocket):
             
             # record history
             self.add_backup(t,u)
-            # flag: landed
+            # flag -> landed
             self.flag = 5 
             # quit integration
             if self.integ == 'lsoda_odeint':
@@ -367,7 +407,7 @@ class trajec_main(Rocket):
             # total acceleration 
             dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.grav) + self.Coriolis(v, Tbl) + aeroF / mass
 
-        elif self.flag == 4:
+        elif self.flag == 3.5 or self.flag == 4:
             # parachute deployed
             dv_dt = np.dot(Tbl, self.grav) + self.Coriolis(v, Tbl) + self.parachute_F(x,v,Tbl) / mass
         #END IF
@@ -380,7 +420,7 @@ class trajec_main(Rocket):
         # quaternion differential equation
         
         # stop rotation when parachute ihas deployed
-        if self.flag == 4:
+        if self.flag == 3.5 or self.flag == 4:
             omega *= 0.
         #END IF
         
@@ -403,7 +443,7 @@ class trajec_main(Rocket):
         #             aeroM     = aeroM(u):     function of state 
         #             ThrustM   = ThrustM(t)=0: function of time
         
-        if self.flag == 1 or self.flag == 4:
+        if self.flag == 1 or self.flag == 3.5 or self.flag == 4:
             # on launch rail /parachute deployed -> no angular velocity change
             domega_dt = np.zeros(3)
 

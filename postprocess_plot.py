@@ -105,6 +105,7 @@ class PostProcess_dist():
         lim_radius = 50.0   # define circle limit area
         self.set_coordinate_izu()
     
+        """ # for tamura version
         # Set map image
         img_map = Image.open("./map/Izu_map_mag.png")
         img_list = np.asarray(img_map)
@@ -114,6 +115,18 @@ class PostProcess_dist():
     
         #pixel2meter = (139.431463 - 139.41283)/1800.0 * lon2met
         pixel2meter = 0.946981208125
+        """
+        
+        # for extended version
+        # Set map image
+        img_map = Image.open("./map/map_extended.png")
+        img_list = np.asarray(img_map)
+        img_height = img_map.size[1]
+        img_width = img_map.size[0]
+        img_origin = np.array([231, 284])    # TODO : compute by lat/long of launcher point
+        
+        pixel2meter = 7.796379
+        # """
     
         # Define image range 
         img_left =   -1.0 * img_origin[0] * pixel2meter
@@ -319,4 +332,16 @@ class JudgeInside():
         # print('judge!,',  judge_result, check_point)
 
         return judge_result    
+
+
+if __name__ == '__main__':
+    tmp = PostProcess_dist()
+    tmp.set_coordinate_izu()
+    tmp.plot_map()
+
+    # drop_point_test = 
+
+# END IF 
+
+
     

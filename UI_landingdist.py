@@ -97,6 +97,7 @@ class TrajecSimu_UI():
                 # overwrite wind speed
                 params_update[1][1] = wind_angle
                 
+                """
                 # -----------------------------------
                 #  landing point for ballistic fall  
                 # -----------------------------------
@@ -112,6 +113,7 @@ class TrajecSimu_UI():
                 self.myrocket.postprocess('maxval')
                 # record landing location
                 self.record_loop_result('bal', i_speed,i_angle)
+                """
                 
                 #
                 # ---------------------------------

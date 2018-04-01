@@ -120,10 +120,12 @@ class Rocket():
                             # -----------------------------       
                             # parachute parameters
                             # -----------------------------
-                            't_deploy' : 1000.,   # parachute deployment time from ignition
+                            't_deploy' : 1000.,      # parachute deployment time from ignition
                             't_para_delay': 1000.,   # parachute deployment time from apogee detection
-                            'Cd_para': 1.,       # parachute drag coefficient
-                            'S_para': 0.5,      # parachute area [m^2]
+                            'Cd_para': 1.,           # drag coefficient of 1st parachute
+                            'S_para': 0.5,           # parachute area of 1st parachute[m^2]
+                            'second_para': False,       # True if two stage parachute deployment
+                            
                             } 
 
         return None
@@ -279,14 +281,23 @@ class Rocket():
             sys.exit()
         
         # -----------------------------  
-        # parachute property
+        # parachute properties
         # -----------------------------
         try:
             self.t_deploy = float( self.params_dict['t_deploy'] )         # parachute deployment time from ignition
             self.t_para_delay = float( self.params_dict['t_para_delay'] ) # parachute deployment time from apogee detection
             self.apogee_count = 0                                         # apogee count
-            self.Cd_para = float( self.params_dict['Cd_para'] )           # parachute drag coefficient
-            self.S_para = float( self.params_dict['S_para'] )             # parachute area [m^2]
+            self.Cd_para = float( self.params_dict['Cd_para'] )           # drag coefficient of 1st parachute
+            self.S_para = float( self.params_dict['S_para'] )             # area of 1st prarachute [m^2]
+            self.flag_2ndpara = self.params_dict['second_para']           # True id two stage separation
+
+            if self.flag_2ndpara:
+                # if two stage deployment is true, define 2nd stage parachute properties
+                self.t_deploy_2 = float( self.params_dict['t_deploy_2'] )           # 2nd parachute deployment time from ignition
+                # self.t_para_delay = float( self.params_dict['t_para_delay'] )   # 2nd parachute deployment time from apogee detection
+                self.Cd_para_2 = float( self.params_dict['Cd_para_2'] )               # drag coefficient of 2nd parachute
+                self.S_para_2 = float( self.params_dict['S_para_2'] )                 # net area of 2nd prarachute [m^2]
+            
         except:
             # display error message
             print('Error in parachute property parameters')  
@@ -816,7 +827,7 @@ class Rocket():
         u = self.trajectory.solution[:,3]
         v = self.trajectory.solution[:,4]
         w = self.trajectory.solution[:,5]
-        #speed = np.linalg.norm(history[:,3:6],axis=1)
+        speed = np.linalg.norm(self.trajectory.solution[:,3:6],axis=1)
         
         """
         # time array
@@ -835,7 +846,7 @@ class Rocket():
         # w history
         plt.plot(time,w,lw=1.5,label='Vz')
         # speed history
-        #plt.plot(time,speed,lw=5,label='Speed')
+        plt.plot(time,speed,lw=2,label='Speed')
         plt.legend()
         plt.title('Velocity vs. time')
         plt.xlabel('t [s]')
