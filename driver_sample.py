@@ -32,7 +32,7 @@ mysim.run_single()
 #         n_winddirec: number of wind directions 
 #         max_windspeed: max. wind speed [m/s]
 #         windspeed_step: wind speed step [m/s]
-# mysim.run_loop(16, 5, 1)
+# mysim.run_loop(16, 4, 1)
 
 # ------------------------------------
 # run an optimization problem

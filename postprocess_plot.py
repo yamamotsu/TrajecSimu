@@ -42,6 +42,7 @@ class PostProcess_dist():
                                 [34.735715,	139.420922],
                                 ])
     
+    
         # Define convert value from lat/long[deg] to meter[m]
         origin = point_rail
         earth_radius = 6378150.0    # [km]
@@ -79,9 +80,24 @@ class PostProcess_dist():
     
         for i in range(self.xy_range[:,0].size):
             self.xy_range[i,:] = mat_rot @ self.xy_range[i,:]
+        # END FOR
     
+        # -------------------------------
+        # hardcoding: landing point of Felix-yayaHeavy on 3/23
+        point_land = np.array([ 34.73534332, 139.4215288] )
+        # switch 34.735390, 139.421377
+        # rail   34.735972, 139.420944
+        point_land -= origin
+        self.xy_land = np.zeros(2)
+        self.xy_land[1] = lat2met * point_land[0]
+        self.xy_land[0] = lon2met * point_land[1]
+        self.xy_land = mat_rot @ self.xy_land
+        print('landing point xy:', self.xy_land)
+        # -------------------------------
+        
         return None
-    
+        
+        
     
     
     def judge_in_range(self, drop_point):
@@ -105,7 +121,7 @@ class PostProcess_dist():
         lim_radius = 50.0   # define circle limit area
         self.set_coordinate_izu()
     
-        """ # for tamura version
+        # for tamura version
         # Set map image
         img_map = Image.open("./map/Izu_map_mag.png")
         img_list = np.asarray(img_map)
@@ -115,8 +131,8 @@ class PostProcess_dist():
     
         #pixel2meter = (139.431463 - 139.41283)/1800.0 * lon2met
         pixel2meter = 0.946981208125
-        """
         
+        """
         # for extended version
         # Set map image
         img_map = Image.open("./map/map_extended.png")
@@ -140,21 +156,23 @@ class PostProcess_dist():
         # plot setting
         ax = plt.axes()
         color_line = '#ffff33'    # Yellow
-        color_circle = 'r'    # Red
+        color_circle = 'b'    # Red
     
         # Set circle object
-        cir_rail = patches.Circle(xy=self.xy_rail, radius=lim_radius, ec=color_circle, fill=False)
-        cir_switch = patches.Circle(xy=self.xy_switch, radius=lim_radius, ec=color_circle, fill=False)
-        cir_tent = patches.Circle(xy=self.xy_tent, radius=lim_radius, ec=color_circle, fill=False)
-        ax.add_patch(cir_rail)
-        ax.add_patch(cir_switch)
-        ax.add_patch(cir_tent)
+        #cir_rail = patches.Circle(xy=self.xy_rail, radius=lim_radius, ec=color_circle, fill=False)
+        #cir_switch = patches.Circle(xy=self.xy_switch, radius=lim_radius, ec=color_circle, fill=False)
+        #cir_tent = patches.Circle(xy=self.xy_tent, radius=lim_radius, ec=color_circle, fill=False)
+        #ax.add_patch(cir_rail)
+        #ax.add_patch(cir_switch)
+        #ax.add_patch(cir_tent)
     
         # Write landing permission range
-        plt.plot(self.xy_rail[0], self.xy_rail[1], '.', color=color_circle)
-        plt.plot(self.xy_switch[0], self.xy_switch[1], '.', color=color_circle)
-        plt.plot(self.xy_tent[0], self.xy_tent[1], '.', color=color_circle)
+        plt.plot(self.xy_rail[0], self.xy_rail[1], 'b.', color=color_circle, markersize = 12)
+        #plt.plot(self.xy_switch[0], self.xy_switch[1], '.', color=color_circle)
+        #plt.plot(self.xy_tent[0], self.xy_tent[1], '.', color=color_circle)
         plt.plot(self.xy_range[:,0], self.xy_range[:,1], '--', color=color_line)
+        # plot landing point
+        plt.plot(self.xy_land[0], self.xy_land[1], 'r*', markersize = 12)
     
         ax.set_aspect('equal')
     
