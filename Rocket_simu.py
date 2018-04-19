@@ -124,11 +124,11 @@ class Rocket():
                             't_para_delay': 1000.,   # parachute deployment time from apogee detection
                             'Cd_para': 1.,           # drag coefficient of 1st parachute
                             'S_para': 0.5,           # parachute area of 1st parachute[m^2]
-                            # 'second_para': False,       # True if two stage parachute deployment
-                            # 't_deploy_2': 20000,       
-                            # 'Cd_para_2': 1,
-                            # 'S_para_2': 6.082,
-                            # 'alt_para_2': -100,
+                            'second_para': False,       # True if two stage parachute deployment
+                            't_deploy_2': 20000,       
+                            'Cd_para_2': 1,
+                            'S_para_2': 6.082,
+                            'alt_para_2': -100,
                             } 
 
         return None
