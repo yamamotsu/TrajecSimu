@@ -13,7 +13,6 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy import fftpack, interpolate, integrate, optimize
 import pandas as pd
 import subprocess
-import quaternion 
 
 # class
 class Rocket():
@@ -126,7 +125,10 @@ class Rocket():
                             'Cd_para': 1.,           # drag coefficient of 1st parachute
                             'S_para': 0.5,           # parachute area of 1st parachute[m^2]
                             'second_para': False,       # True if two stage parachute deployment
-                            
+                            't_deploy_2': 20000,       
+                            'Cd_para_2': 1,
+                            'S_para_2': 6.082,
+                            'alt_para_2': -100,
                             } 
 
         return None
@@ -225,7 +227,7 @@ class Rocket():
             
             self.aero_fin_mode = self.params_dict['aero_fin_mode'].strip()  # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
             
-            # aerodynamic damping moment coefficient
+            # aerodynamic damping moment coefficient]
             # non_dimensional
             Cm_omega = np.array([ float(self.params_dict['Cmp']), float(self.params_dict['Cmq']), float(self.params_dict['Cmq']) ]) 
             # Cm_omega_bar = Cm_omega * l^2 * S
@@ -298,6 +300,8 @@ class Rocket():
                 # self.t_para_delay = float( self.params_dict['t_para_delay'] )   # 2nd parachute deployment time from apogee detection
                 self.Cd_para_2 = float( self.params_dict['Cd_para_2'] )               # drag coefficient of 2nd parachute
                 self.S_para_2 = float( self.params_dict['S_para_2'] )                 # net area of 2nd prarachute [m^2]
+                self.alt_para_2 = float( self.params_dict['alt_para_2'] )             # altitude of 2nd parachute deployment
+            
             
         except:
             # display error message
@@ -581,17 +585,17 @@ class Rocket():
         if show:
             print('--------------------')
             print(' THRUST DATA ECHO')
-            print(' total impulse (raw): ', np.round( self.trajectory.Impulse_total, 2), '[N.s]')
+            print(' total impulse (raw): ', self.trajectory.Impulse_total, '[N.s]')
             try:
                 if self.trajectory.curve_fitting:
-                    print('       error due to poly. fit: ', np.round( self.trajectory.It_poly_error, 4), ' [%]')    
+                    print('       error due to poly. fit: ', self.trajectory.It_poly_error, ' [%]')    
                 # END IF
             except:
                 pass
-            print(' burn time: ', np.round( self.trajectory.t_MECO, 2), '[s]')
-            print(' max. thrust: ', np.round(self.trajectory.Thrust_max, 2), '[N]')
-            print(' average thrust: ', np.round( self.trajectory.Thrust_avg, 2), '[N]')
-            print(' specific impulse: ', np.round( Isp, 2), '[s]' )
+            print(' burn time: ', self.trajectory.t_MECO, '[s]')
+            print(' max. thrust: ', self.trajectory.Thrust_max, '[N]')
+            print(' average thrust: ', self.trajectory.Thrust_avg, '[N]')
+            print(' specific impulse: ', Isp, '[s]' )
             print('--------------------')
             # plot filtered thrust curve
             fig = plt.figure(1)
@@ -631,7 +635,7 @@ class Rocket():
             # show result
             print('----------------------------')
             print('landing location:')
-            print('[x,y,z] = [', np.round(xloc, 2), ', ', np.round(yloc, 2), ',', np.round(zloc, 2), ']')
+            print('[x,y,z] = ', xloc, yloc, zloc)
             print('----------------------------')
         # END IF
         
@@ -705,10 +709,9 @@ class Rocket():
             print(' Flight conditions at Max-Q.')
             print(' free-stream pressure: ', "{0:6.2e}".format(p[Q_max]) ,'[Pa]')
             print(' free-stream temperature: ', "{0:.1f}".format(T[Q_max]) ,'[T]')
-            print(' free-stream density: ', "{0:.3f}".format(rho[Q_max]) ,'[kg/m^3]')
             print(' free-stream Mach: ', "{0:.3f}".format(speed[Q_max]/a[Q_max]) )
             print(' Wind speed: ',  "{0:.2f}".format(wind_speed),'[m/s]')
-            print(' Angle of attack for gust rate 2: ', "{0:.2f}".format(np.arctan( wind_speed/speed[Q_max])*180./np.pi ),'[deg]')
+            print(' Angle of attack for gust rate 2: ', "{0:.1f}".format(np.arctan( wind_speed/speed[Q_max])*180./np.pi ),'[deg]')
             print('----------------------------')  
 
         return None  
@@ -822,46 +825,15 @@ class Rocket():
         
     def plot_velocity(self,time):
         # =============================================
-        # this method plots u,v,w (velocity wrt earth) as well as air speeds history
+        # this method plots u,v,w (velocity wrt earth) as a function of time
         # =============================================
         
         # velocity = [u,v,w] history
         u = self.trajectory.solution[:,3]
         v = self.trajectory.solution[:,4]
         w = self.trajectory.solution[:,5]
+        speed = np.linalg.norm(self.trajectory.solution[:,3:6],axis=1)
         
-        # compute air_velocity and AoA history
-        # array of rho, a histories: use standard air
-        n = len(self.trajectory.solution[:,2])
-        air_speed = np.zeros(n)
-        AoA = np.zeros(n)
-                
-        for i in range(n):
-            # realize vectors and transformation matrix
-            x_vec,v_vec,q,_ = self.trajectory.state2vecs_quat(self.trajectory.solution[i,:])
-            Tbl = quaternion.as_rotation_matrix(np.conj(q))
-            # airspeed and AoA
-            air_speed[i], _, AoA[i], _ = self.trajectory.air_state(x_vec,v_vec,Tbl)
-        #END IF
-        
-        # split arrays for each flight mode
-        
-        t_launchclear = 1.
-        t_MECO = self.trajectory.t_MECO
-        t_deploy = self.trajectory.t_deploy
-        dt = self.trajectory.dt
-        
-        # ***_t: thrusted flight (before MECO)
-        # ***_c: inertial flight
-        # ***_p: parachute fall
-        
-        try:
-            time_l, time_t, time_c, time_p = np.split(time,[ int(t_launchclear/dt), int(np.ceil(t_MECO/dt)), int(np.ceil(t_deploy/dt)) ] )
-            AoA_l,  AoA_t,  AoA_c,  AoA_p  = np.split(AoA,[ int(t_launchclear/dt), int(np.ceil(t_MECO/dt)), int(np.ceil(t_deploy/dt)) ] )
-        except:
-            time_l, time_t, time_c = np.split(time,[ int(t_launchclear/dt), int(np.ceil(t_MECO/dt))] )
-            AoA_l,  AoA_t,  AoA_c  = np.split(AoA, [ int(t_launchclear/dt), int(np.ceil(t_MECO/dt))] )
-            
         """
         # time array
         time = self.trajectory.t
@@ -879,23 +851,11 @@ class Rocket():
         # w history
         plt.plot(time,w,lw=1.5,label='Vz')
         # speed history
-        plt.plot(time,air_speed,lw=2,label='TAS')
+        plt.plot(time,speed,lw=2,label='Speed')
         plt.legend()
         plt.title('Velocity vs. time')
         plt.xlabel('t [s]')
         plt.ylabel('v [m/s]')
-        plt.grid()
-        #plt.show  
-
-        plt.figure(5)
-        # AoA history
-        print('debug: ', time_t[0])
-        plt.plot(time_t,AoA_t*180./np.pi,lw=1.5, label='powered')
-        plt.plot(time_c,AoA_c*180./np.pi,lw=1.5, label='coasting')
-        plt.legend()
-        plt.title('Angle of attack vs. time')
-        plt.xlabel('t [s]')
-        plt.ylabel('AoA [deg]')
         plt.grid()
         #plt.show  
         
@@ -921,7 +881,7 @@ class Rocket():
         """
         
         
-        plt.figure(6)
+        plt.figure(5)
         # p history 
         plt.plot(time,p,lw=1.5,label='omega_x')
         # q history

@@ -205,6 +205,13 @@ class trajec_main(Rocket):
         #                    4   : main parachute deployed
         #                    5   : landed
         # =======================================
+
+        # **************************************************
+        # **************************************************
+        # altitude at which main parachute will be deployed
+        alt_2nd_deploy = 50.  # [m]
+        # **************************************************
+        # **************************************************
         
         # if the rocket has already landed, return 0
         if self.flag == 5:
@@ -248,30 +255,25 @@ class trajec_main(Rocket):
         # ----------------------------
         if self.flag==1 and x[2] > self.rail_height:
             # detect launch clear
-
-            # get air speed and AoA
-            air_speed, _, AoA, _ = self.air_state(x,v,Tbl)
             print('----------------------------')
-            print('  Launcher-clear at t = ',np.round(t, 2),'[s]')
-            print('  ground speed: ',np.round(np.linalg.norm(v), 2),'[m/s]')
-            print('  true air speed: ', np.round(air_speed, 2), '[m/s], AoA: ', np.round(AoA*180./np.pi, 3), '[deg]')
+            print('  Launcher-clear at t = ',t,'[s]')
+            print('  ground speed: ',np.linalg.norm(v),'[m/s]')
             print('----------------------------')
             print(' ')
             
             # record history
             self.add_backup(t,u)
-            # record launch clear air speed
-            self.res_trajec_main.update( { 'v_launch_clear' : air_speed } )
+            # record launch clear speed
+            self.res_trajec_main.update( { 'v_launch_clear' : np.linalg.norm(v) } )
             # switch into thrusted flight
             self.flag = 2   
             
         elif (self.flag==1 or self.flag==2) and t >= self.t_MECO:
             # detect MECO
-
             print('----------------------------')
-            print('  MECO at t = ',np.round(t, 2), '[s]')
-            print('  current altitude: ',np.round(x[2], 2), '[m]')
-            print('  ground speed:    ',np.round(np.linalg.norm(v), 2), '[m/s]')
+            print('  MECO at t = ',t,'[s]')
+            print('  current altitude: ',x[2],'[m]')
+            print('  ground speed:    ',np.linalg.norm(v),'[m/s]')
             print('----------------------------')
             print(' ')
             
@@ -282,18 +284,13 @@ class trajec_main(Rocket):
             
         elif self.flag==3 and t >= self.t_deploy:
             # detect 1st parachute deployment
-
-            # get air speed and AoA
-            air_speed, _, AoA, _ = self.air_state(x,v,Tbl)
-            # get air property
-            _,p_tmp,rho_tmp,_ = self.standard_air(x[2])
-            
+            # air speed
+            air_speed = np.linalg.norm( -v + np.dot( Tbl,self.wind(x[2]) ) ) 
             print('----------------------------')
-            print('  1st parachute deployed at t = ', np.round(t, 2), '[s]')
-            print('  current altitude: ', np.round(x[2], 2), '[m]')
-            print('  ground speed:    ', np.round(np.linalg.norm(v), 2), '[m/s]')
-            print('  true air speed: ', np.round(air_speed, 2), '[m/s], AoA: ', np.round(AoA*180./np.pi, 3), '[deg]')
-            print('  air density: ', np.round(rho_tmp,3) , '[kg/m^3], pressure: ', np.round(p_tmp,1) ,'[Pa]')
+            print('  1st parachute deployed at t = ', t, '[s]')
+            print('  current altitude: ', x[2], '[m]')
+            print('  ground speed:    ', np.linalg.norm(v), '[m/s]')
+            print('  true air speed: ', air_speed, '[m/s]')
             print('----------------------------')
             print(' ')
             
@@ -313,26 +310,21 @@ class trajec_main(Rocket):
             omega = np.zeros(3)  
             
         # elif self.flag==3.5 and (t >= self.t_deploy_2 or 高度が規定値以下) :
-        elif self.flag==3.5 and t >= self.t_deploy_2:
+        elif self.flag==3.5 and (t >= self.t_deploy_2 or x[2]<=self.alt_para_2):
             # detect 2nd parachute deployment
-
-            # get air speed and AoA
-            air_speed, _, AoA, _ = self.air_state(x,v,Tbl)
-            # get air property
-            _,p_tmp,rho_tmp,_ = self.standard_air(x[2])
-            
+            # air speed
+            air_speed = np.linalg.norm( -v + np.dot( Tbl,self.wind(x[2]) ) ) 
             print('----------------------------')
-            print('  2nd parachute deployed at t = ', np.round(t, 2), '[s]')
-            print('  current altitude: ', np.round(x[2], 2), '[m]')
-            print('  ground speed:    ', np.round(np.linalg.norm(v), 2), '[m/s]')
-            print('  true air speed: ', np.round(air_speed, 2), '[m/s]' )
-            print('  air density: ', np.round(rho_tmp,3) , '[kg/m^3], pressure: ', np.round(p_tmp,1) ,'[Pa]')
+            print('  2nd parachute deployed at t = ', t, '[s]')
+            print('  current altitude: ', x[2], '[m]')
+            print('  ground speed:    ', np.linalg.norm(v), '[m/s]')
+            print('  true air speed: ', air_speed, '[m/s]')
             print('----------------------------')
             print(' ')
             
             # overwrite parachute properties with 2nd para
             self.Cd_para = self.Cd_para_2
-            self.S_para += self.S_para_2
+            self.S_para = self.S_para_2
             
             # record history
             self.add_backup(t,u)
@@ -344,10 +336,10 @@ class trajec_main(Rocket):
         elif self.flag > 1 and self.flag < 5 and x[2] < 0. :
             # detect landing
             print('----------------------------')
-            print('  Landing at t = ',np.round(t, 2), '[s]')
-            print('  landing ground speed: ', np.round(np.linalg.norm(v), 2), '[m/s]')
-            print('          location x = ', np.round(x[0], 2), '[m]')
-            print('                   y = ', np.round(x[1], 2), '[m]')
+            print('  Landing at t = ',t,'[s]')
+            print('  landing speed: ',np.linalg.norm(v),'[m/s]')
+            print('          location x = ',x[0],'[m]')
+            print('                   y = ',x[1],'[m]')
             print('----------------------------')
             print(' ')
             # record landing time
@@ -619,7 +611,42 @@ class trajec_main(Rocket):
         # --------------------------------------------------
         #   Compute air velocity, angle-of-attack, roll-angle
         # --------------------------------------------------
-        air_speed, v_air, alpha, phi = self.air_state(x,v,Tbl)
+        # air velocity = -rocket_velocity + wind_velocity
+        #    NOTE: wind(x) is wind velocity in local coord. need conversion to body coord.
+        v_air = -v + np.dot( Tbl,self.wind(x[2]) )   
+        air_speed = np.linalg.norm(v_air) # air speed (positive scalar)
+    
+        # total angle-of-attack
+        if air_speed == 0:
+            alpha = 0.
+        else:
+            alpha = np.arccos( -v_air[0]/air_speed )
+            #if v_air[0] > 0:
+            #    alpha = -alpha
+            #END IF
+        #END IF
+        
+        #if np.isnan(alpha):
+        #    alpha = 0.
+        
+        # roll-angle
+        if v_air[2]==0:
+            # if w = 0, atan(v/w) is not defined 
+            if -v_air[1] > 0:
+                phi = np.pi /2.
+            else:
+                phi = -np.pi /2.    
+        else:
+            phi = np.arctan( -v_air[1]/ -v_air[2] )
+            if -v_air[2]<0:
+                # if w<0, that is in 3rd or 4th quadrant in yz-plane, add pi to phi
+                #  so that sign of sin(phi), cos(phi) will be correctly calculated.
+                phi += np.pi
+            #END IF
+        #END IF
+                
+        #if np.isnan(phi):
+        #    phi = np.arctan( v_air[1]+0.0001/v_air[2]+0.0001 )
             
         # ----------------------------------
         #   aerodynamic force on body ( might exclude fins)
@@ -806,57 +833,6 @@ class trajec_main(Rocket):
         moment_all = m1+m2+m3+m4
         
         return force_all, moment_all
-
-    def air_state(self,x,v,Tbl):
-        # =======================================
-        # returns air speed, air velocity, angle of attack, and roll angle
-        #
-        # INPUT:  x            = translation         :in fixed coordinate
-        #         v            = velocity            :in body coordinate
-        #         Tbl          = transform matrix from local(fixed) coordinate to body coord.
-        # OUTOUT: air_speed    = air speed [m/s]
-        #         v_air        = air velocity vector
-        # =======================================
-
-        # air velocity = -rocket_velocity + wind_velocity
-        # NOTE: wind(x) is wind velocity in local coord. need conversion to body coord.
-        v_air = -v + np.dot( Tbl, self.wind(x[2]) )   
-        air_speed = np.linalg.norm(v_air) # air speed (positive scalar)
-
-        # total angle-of-attack
-        if air_speed == 0:
-            alpha = 0.
-        else:
-            alpha = np.arccos( -v_air[0]/air_speed )
-            #if v_air[0] > 0:
-            #    alpha = -alpha
-            #END IF
-        #END IF
-        
-        # if np.isnan(alpha):
-        #    alpha = 0.
-
-        # roll-angle
-        if v_air[2]==0:
-            # if w = 0, atan(v/w) is not defined 
-            if -v_air[1] > 0:
-                phi = np.pi /2.
-            else:
-                phi = -np.pi /2.    
-        else:
-            phi = np.arctan( -v_air[1]/ -v_air[2] )
-            if -v_air[2]<0:
-                # if w<0, that is in 3rd or 4th quadrant in yz-plane, add pi to phi
-                #  so that sign of sin(phi), cos(phi) will be correctly calculated.
-                phi += np.pi
-            #END IF
-        #END IF
-                
-        #if np.isnan(phi):
-        #    phi = np.arctan( v_air[1]+0.0001/v_air[2]+0.0001 )
-
-        return air_speed, v_air, alpha, phi
-    
     
     def parachute_F(self,x,v,Tbl):
         # =======================================
@@ -1067,8 +1043,8 @@ class trajec_main(Rocket):
         # setup Cd0 curve as a function of Mach number
         
         # array from CFD
-        Cd0_array = np.array([0.6, 0.706,0.699,0.707,0.756,0.964,1.120,1.094,1.060,1.023,0.985,0.951,0.914,0.877,0.839,0.802,0.7])
-        # Cd0_array = np.array([0.7,0.806,0.799,0.810,0.869,1.121,1.312,1.280,1.240,1.195,1.150,1.108,1.065,1.020,0.975,0.930, 0.8])
+        # Cd0_array = np.array([0.6, 0.706,0.699,0.707,0.756,0.964,1.120,1.094,1.060,1.023,0.985,0.951,0.914,0.877,0.839,0.802,0.7])
+        Cd0_array = np.array([0.7,0.806,0.799,0.810,0.869,1.121,1.312,1.280,1.240,1.195,1.150,1.108,1.065,1.020,0.975,0.930, 0.8])
         Mach_array = np.array([0., 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 10.0])
         
         # 2d interpolation
