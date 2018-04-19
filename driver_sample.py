@@ -22,6 +22,7 @@ mysim = TrajecSimu_UI(csv_filename)
 
 # ------------------------------------
 # run a single trajectory computation 
+
 # ------------------------------------
 mysim.run_single()
 

@@ -705,6 +705,7 @@ class Rocket():
             print(' Flight conditions at Max-Q.')
             print(' free-stream pressure: ', "{0:6.2e}".format(p[Q_max]) ,'[Pa]')
             print(' free-stream temperature: ', "{0:.1f}".format(T[Q_max]) ,'[T]')
+            print(' free-stream density: ', "{0:.3f}".format(rho[Q_max]) ,'[kg/m^3]')
             print(' free-stream Mach: ', "{0:.3f}".format(speed[Q_max]/a[Q_max]) )
             print(' Wind speed: ',  "{0:.2f}".format(wind_speed),'[m/s]')
             print(' Angle of attack for gust rate 2: ', "{0:.2f}".format(np.arctan( wind_speed/speed[Q_max])*180./np.pi ),'[deg]')

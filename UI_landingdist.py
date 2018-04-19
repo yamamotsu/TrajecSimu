@@ -62,8 +62,6 @@ class TrajecSimu_UI():
         wind_direction_array = np.linspace(0., 360., n_winddirec+1)
         wind_speed_array = np.arange(1., max_windspeed + windspeed_step, windspeed_step)
         
-        wind_direction_array = np.array([44.,45.,46.])
-        wind_speed_array = np.array([3.6])
         # --------------------
         # initialize arrays 
         # --------------------

@@ -82,8 +82,9 @@ class PostProcess_dist():
             self.xy_range[i,:] = mat_rot @ self.xy_range[i,:]
         # END FOR
     
+        """
         # -------------------------------
-        # hardcoding: landing point of Felix-yayaHeavy on 3/23
+        # hardcoding: actual landing point of Felix-yayaHeavy on 3/23
         point_land = np.array([ 34.73534332, 139.4215288] )
         # switch 34.735390, 139.421377
         # rail   34.735972, 139.420944
@@ -92,8 +93,9 @@ class PostProcess_dist():
         self.xy_land[1] = lat2met * point_land[0]
         self.xy_land[0] = lon2met * point_land[1]
         self.xy_land = mat_rot @ self.xy_land
-        print('landing point xy:', self.xy_land)
+        print('actual landing point xy:', self.xy_land)
         # -------------------------------
+        """
         
         return None
         
@@ -159,21 +161,22 @@ class PostProcess_dist():
         color_circle = 'b'    # Red
     
         # Set circle object
-        #cir_rail = patches.Circle(xy=self.xy_rail, radius=lim_radius, ec=color_circle, fill=False)
-        #cir_switch = patches.Circle(xy=self.xy_switch, radius=lim_radius, ec=color_circle, fill=False)
-        #cir_tent = patches.Circle(xy=self.xy_tent, radius=lim_radius, ec=color_circle, fill=False)
-        #ax.add_patch(cir_rail)
-        #ax.add_patch(cir_switch)
-        #ax.add_patch(cir_tent)
+        cir_rail = patches.Circle(xy=self.xy_rail, radius=lim_radius, ec=color_circle, fill=False)
+        cir_switch = patches.Circle(xy=self.xy_switch, radius=lim_radius, ec=color_circle, fill=False)
+        cir_tent = patches.Circle(xy=self.xy_tent, radius=lim_radius, ec=color_circle, fill=False)
+        ax.add_patch(cir_rail)
+        ax.add_patch(cir_switch)
+        ax.add_patch(cir_tent)
     
         # Write landing permission range
-        plt.plot(self.xy_rail[0], self.xy_rail[1], 'b.', color=color_circle, markersize = 12)
-        #plt.plot(self.xy_switch[0], self.xy_switch[1], '.', color=color_circle)
-        #plt.plot(self.xy_tent[0], self.xy_tent[1], '.', color=color_circle)
+        plt.plot(self.xy_rail[0], self.xy_rail[1], 'b.', color=color_circle, markersize = 12, label='launcher')
+        plt.plot(self.xy_switch[0], self.xy_switch[1], '.', color=color_circle)
+        plt.plot(self.xy_tent[0], self.xy_tent[1], '.', color=color_circle)
         plt.plot(self.xy_range[:,0], self.xy_range[:,1], '--', color=color_line)
-        # plot landing point
-        plt.plot(self.xy_land[0], self.xy_land[1], 'r*', markersize = 12)
-    
+        """
+        # plot landing point for 2018/3/23
+        plt.plot(self.xy_land[0], self.xy_land[1], 'r*', markersize = 12, label='actual langing point')
+        """
         ax.set_aspect('equal')
     
     
@@ -201,14 +204,19 @@ class PostProcess_dist():
     
         title_name = fall_type + ", Launcher elev. " + str(int(launcher_elev_angle)) + " deg"
     
-    
+        """ for normal
         imax = len(wind_speed_array)
         for i in range(imax):
     
             # cmap = plt.get_cmap("winter")
     
             labelname = str(wind_speed_array[i]) + " m/s"
-            plt.plot(drop_point[i,:,0],drop_point[i,:,1], label = labelname, linewidth=2, color=cm.Oranges(i/imax))
+            plt.plot(drop_point[i,:,0],drop_point[i,:,1], label = labelname, lw=2, color=cm.Oranges(i/imax))
+        """
+        
+        # for izu 2018
+        plt.plot(drop_point[0,0,0],drop_point[0,0,1], 'ws', label='simulated langing point')
+        print('simu landing point:', drop_point[0,0,0],drop_point[0,0,1])
             
             
         # output_name = "output/Figure_elev_" + str(int(rail_elev)) + ".png"

@@ -285,11 +285,15 @@ class trajec_main(Rocket):
 
             # get air speed and AoA
             air_speed, _, AoA, _ = self.air_state(x,v,Tbl)
+            # get air property
+            _,p_tmp,rho_tmp,_ = self.standard_air(x[2])
+            
             print('----------------------------')
             print('  1st parachute deployed at t = ', np.round(t, 2), '[s]')
             print('  current altitude: ', np.round(x[2], 2), '[m]')
             print('  ground speed:    ', np.round(np.linalg.norm(v), 2), '[m/s]')
             print('  true air speed: ', np.round(air_speed, 2), '[m/s], AoA: ', np.round(AoA*180./np.pi, 3), '[deg]')
+            print('  air density: ', np.round(rho_tmp,3) , '[kg/m^3], pressure: ', np.round(p_tmp,1) ,'[Pa]')
             print('----------------------------')
             print(' ')
             
@@ -314,17 +318,21 @@ class trajec_main(Rocket):
 
             # get air speed and AoA
             air_speed, _, AoA, _ = self.air_state(x,v,Tbl)
+            # get air property
+            _,p_tmp,rho_tmp,_ = self.standard_air(x[2])
+            
             print('----------------------------')
             print('  2nd parachute deployed at t = ', np.round(t, 2), '[s]')
             print('  current altitude: ', np.round(x[2], 2), '[m]')
             print('  ground speed:    ', np.round(np.linalg.norm(v), 2), '[m/s]')
             print('  true air speed: ', np.round(air_speed, 2), '[m/s]' )
+            print('  air density: ', np.round(rho_tmp,3) , '[kg/m^3], pressure: ', np.round(p_tmp,1) ,'[Pa]')
             print('----------------------------')
             print(' ')
             
             # overwrite parachute properties with 2nd para
             self.Cd_para = self.Cd_para_2
-            self.S_para = self.S_para_2
+            self.S_para += self.S_para_2
             
             # record history
             self.add_backup(t,u)
