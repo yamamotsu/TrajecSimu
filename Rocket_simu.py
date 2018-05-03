@@ -36,7 +36,10 @@ class Rocket():
         # =============================================
         
         # read csv file that contains initial parameters
-        self.params_df = pd.read_csv(csv_filename, comment='$', names=('parameter', 'value') ) # '$' denotes commet out  
+        try:
+            self.params_df = pd.read_csv(csv_filename, comment='$', names=('parameter', 'value') ) # '$' denotes commet out  
+        except:
+            self.params_df = pd.read_csv(csv_filename, comment='$', names=('parameter', 'value', ' ') ) # '$' denotes commet out  
         
         # initialize parameters by setting default values
         self.get_default()   
@@ -104,7 +107,7 @@ class Rocket():
                             'Cd0'              : 0.6,      # drag coefficient at Mach 0.1, AoA = 0deg
                             'Cmp'              : -0.,      # stability derivative of rolling moment coefficient (aerodynamic damping)
                             'Cmq'              : -3.,     # stability derivative of pitching/yawing moment coefficient (aerodynamic damping)
-                            'Cl_alpha'         : 10.,      # lift slope for small AoA
+                            'Cl_alpha'         : 10.,      # lift coefficient slope for small AoA
 
                             # -----------------------------
                             # rocket engine parameters
@@ -743,7 +746,7 @@ class Rocket():
         dt = self.trajectory.dt
         
         # ***_t: thrusted flight (before MECO)
-        # ***_c: inertial flight
+        # ***_c: coasting flight
         # ***_p: parachute fall
         try:
             time_t, time_c, time_p = np.split(time,[ int(np.ceil(t_MECO/dt)), int(np.ceil(t_deploy/dt)) ] )

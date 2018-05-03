@@ -22,16 +22,20 @@ from postprocess_plot import PostProcess_dist, JudgeInside
 
 class TrajecSimu_UI():
 
-    def __init__(self, csv_filename):
+    def __init__(self, csv_filename, loc='noshiro_sea'):
         # =============================================
         # This method is called when an instance is created
         #
         # input: csv_filename = file name of a csv file that contains parameter informations
+        #        lco          = 'izu' or 'noshiro_sea'
         # =============================================
 
         # create an instance 
         # provide csv file name that contains parameters
         self.myrocket = Rocket(csv_filename)
+        
+        self.launch_location = loc
+        
 
 
     def run_single(self):
@@ -97,7 +101,7 @@ class TrajecSimu_UI():
                 # overwrite wind speed
                 params_update[1][1] = wind_angle
                 
-                """
+                
                 # -----------------------------------
                 #  landing point for ballistic fall  
                 # -----------------------------------
@@ -113,7 +117,7 @@ class TrajecSimu_UI():
                 self.myrocket.postprocess('maxval')
                 # record landing location
                 self.record_loop_result('bal', i_speed,i_angle)
-                """
+                
                 
                 #
                 # ---------------------------------
@@ -159,7 +163,7 @@ class TrajecSimu_UI():
         # -------------------------------
         #  plot
         # -------------------------------
-        mypost = PostProcess_dist()
+        mypost = PostProcess_dist(self.launch_location)
         elev_angle = self.myrocket.trajectory.elev_angle  # launcher elev angle        
         mypost.plot_sct(self.loc_bal,  wind_speed_array, elev_angle, 'Ballistic')
         mypost.plot_sct(self.loc_para, wind_speed_array, elev_angle, 'Parachute')

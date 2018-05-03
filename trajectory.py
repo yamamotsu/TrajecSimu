@@ -9,10 +9,11 @@ Created on Sat Jul  8 23:06:17 2017
 import numpy as np
 from scipy.integrate import ode, odeint
 from scipy import fftpack, interpolate, integrate, optimize
-# import pandas as pd
+import pandas as pd
 import quaternion 
 from Rocket_simu import Rocket
 import matplotlib.pyplot as plt
+import math
 
 class trajec_main(Rocket):
     """
@@ -76,8 +77,8 @@ class trajec_main(Rocket):
         # set flag = 1 (on launch rail)
         self.flag = 1
         
-        # setup Cd0 interpolation curve
-        self.setup_Cd0()
+        # setup aerocoeff interpolation curve
+        self.setup_aero_coeffs()
     
         """
         print('----------------------------')
@@ -200,7 +201,7 @@ class trajec_main(Rocket):
         # NOTE:  self.flag = 0 before ignition
         #                    1   : on launch rail
         #                    2   : thrusted flight
-        #                    3   : inertial flight
+        #                    3   : coasting flight
         #                    3.5 : drogue chute deployed, before main para deployment
         #                    4   : main parachute deployed
         #                    5   : landed
@@ -234,7 +235,6 @@ class trajec_main(Rocket):
         # omega = angular velocity    :expressed in body coordinate
         x,v,q,omega = self.state2vecs_quat(u)
          
-            
         # ----------------------------
         #    Direction Cosine Matrix for input q
         # ----------------------------
@@ -313,7 +313,7 @@ class trajec_main(Rocket):
             omega = np.zeros(3)  
             
         # elif self.flag==3.5 and (t >= self.t_deploy_2 or 高度が規定値以下) :
-        elif self.flag==3.5 and t >= self.t_deploy_2:
+        elif self.flag==3.5 and (t >= self.t_deploy_2 or x[2]<=self.alt_para_2):
             # detect 2nd parachute deployment
 
             # get air speed and AoA
@@ -341,7 +341,7 @@ class trajec_main(Rocket):
             self.flag = 4
         
             
-        elif self.flag > 1 and self.flag < 5 and x[2] < 0. :
+        elif self.flag > 1 and self.flag < 5 and x[2] < 0. and t>2.:
             # detect landing
             print('----------------------------')
             print('  Landing at t = ',np.round(t, 2), '[s]')
@@ -396,7 +396,7 @@ class trajec_main(Rocket):
             # cancell out y,z
             dv_dt = np.array([dv_dt[0],0.,0.])
             
-            if dv_dt[0] < 0:
+            if dv_dt[0] < 0.:
                 # when du/dx is negative (i.e. weight is greater that thrust)
                 # -> rocket is hold up. return zero acceleration
                 dv_dt = np.zeros(3)
@@ -485,7 +485,7 @@ class trajec_main(Rocket):
                 self.t_deploy = min( self.t_deploy, t + self.t_para_delay )
                 self.apogee_count = -1.e10
             #END IF
-        #END IF
+        #END IF            
         
         return du_dt
         
@@ -619,19 +619,20 @@ class trajec_main(Rocket):
         # --------------------------------------------------
         #   Compute air velocity, angle-of-attack, roll-angle
         # --------------------------------------------------
-        air_speed, v_air, alpha, phi = self.air_state(x,v,Tbl)
-            
+        air_speed, v_air, alpha, phi = self.air_state(x,v,Tbl)   
+        
         # ----------------------------------
         #   aerodynamic force on body ( might exclude fins)
         # ----------------------------------
         # air property at the altitude
         _,_,rho,a = self.standard_air(x[2])        
+    
         
         # Mach number
         Mach = air_speed/a
     
-        # drag/lift coefficient
-        Cd,Cl = self.rocket_coeff_nofins(Mach,alpha)
+        # drag/lift coefficient, and C.P. location
+        Cd,Cl,CPloc = self.aero_coeff(Mach,alpha)
         
         # convert coefficient to body coord.
         cosa = np.cos(alpha)
@@ -648,11 +649,12 @@ class trajec_main(Rocket):
         force_all = 0.5 * rho * air_speed**2. * self.X_area * (-C)
         
         # aerodynamic moment wrt CG
-        moment_all = np.cross( np.array([CG-self.CP_body,0.,0.]) , force_all )
+        moment_all = np.cross( np.array([CG - CPloc[0],0.,0.]) , force_all )
         
         # add aerodynamic damping effect  (note: Cm_omega < 0)
         moment_all += 0.25 * rho * air_speed * self.Cm_omega_bar * omega
         
+        """
         if self.aero_fin_mode == 'indiv':
             # ----------------------------------
             #   compute force on fins individually
@@ -667,6 +669,7 @@ class trajec_main(Rocket):
             # total moment
             moment_all += moment_fin
         # END IF 
+        """
         
         """
         F_fill_1d = 0.5 * rho * air_speed**2. * 0.03*0.1 * 0.7
@@ -679,6 +682,7 @@ class trajec_main(Rocket):
         
         return force_all, moment_all
         
+    """
     def fin_aero(self,v_air,omega_x,rho):
         # ==============================================
         # return aerodynamic force and moment generated by fins
@@ -806,6 +810,7 @@ class trajec_main(Rocket):
         moment_all = m1+m2+m3+m4
         
         return force_all, moment_all
+    """
 
     def air_state(self,x,v,Tbl):
         # =======================================
@@ -910,7 +915,6 @@ class trajec_main(Rocket):
         # pressure
         p = self.p0 * (T/self.T0)**5.256  #[Pa]
         """
-        
         
         if h <= 11.*10**3:
             # *** Troposphere ***
@@ -1021,6 +1025,10 @@ class trajec_main(Rocket):
         # INPUT: h = altitude [m]
         # ==============================================
         
+        if h<0.:
+            h = 0
+        # END IF
+        
         # wind velocity in local fixed coordinate
         wind_vec = self.wind_unitvec * self.wind_speed * (h/self.wind_alt_std)**self.Cwind  
 
@@ -1028,20 +1036,29 @@ class trajec_main(Rocket):
         
         
         
-    def rocket_coeff_nofins(self, Mach,alpha):
-        # input: Mach number
+    def aero_coeff(self, Mach,alpha):
+        # ==============================================
+        # returns aerodynamic coefficient
+        # 
+        # INPUT: Mach: Mach number
         #        alpha: angle of attack[rad]
+        #
+        # OUTPUT: Cd:    drag coeff.
+        #         Cl:    lift coeff.
+        #         CPloc: C.P. (center of pressure) location from the nose tip [m]
+        # ==============================================
+        
         # -------------------
         # Lift Coefficient
         # -------------------
-        
+        """
         if self.aero_fin_mode == 'indiv':
             # lift coefficient slope for fin-body individual computations
             #  : slope for body Cl
             k1 = 1.
         # END IF
-        Cl = self.Cl_alpha * np.sin(2.*alpha)
-        
+        """
+        Cl = self.f_cl_alpha(Mach) * np.sin(2.*alpha)
         
         # -------------------
         # Drag Coefficient
@@ -1053,28 +1070,73 @@ class trajec_main(Rocket):
             # powered phase Cd0 correction
             Cd0 -= 0.1 
         # END IF
-        
-        Cd0 *= self.Cd0/0.7
-        
+                
         # drag coefficient "amplitude" for cosign curve fit
         Cd_bar = 15.
+        
         Cd = Cd0 + Cd_bar*( np.cos(2*alpha + np.pi) +1.)
         
-        return Cd, Cl
+        # -------------------
+        # C.P. location
+        # -------------------
+        CPloc = self.f_CPloc(Mach, alpha)
+        
+        return Cd, Cl, CPloc
         
 
-    def setup_Cd0(self):
-        # setup Cd0 curve as a function of Mach number
+    def setup_aero_coeffs(self):
+        # ==============================================
+        # set up aerodynamic coefficients and C.P. location
+        # Put following .dat files in /bin
+        #   Cd0.dat:     Mach numbers vs. Cd0 
+        #   Clalpha.dat: Mach numbers vs. Clalpha
+        # ==============================================
         
-        # array from CFD
-        Cd0_array = np.array([0.6, 0.706,0.699,0.707,0.756,0.964,1.120,1.094,1.060,1.023,0.985,0.951,0.914,0.877,0.839,0.802,0.7])
-        # Cd0_array = np.array([0.7,0.806,0.799,0.810,0.869,1.121,1.312,1.280,1.240,1.195,1.150,1.108,1.065,1.020,0.975,0.930, 0.8])
-        Mach_array = np.array([0., 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 10.0])
+        # ---- drag coeff. at 0 AOA ----
+        # setup Cd0 (Cd at AOA=0) curve as a function of Mach number
+        # Cd0 = 0.6 here, but actural Cd in the program is scaled by the config input Cd0.
         
-        # 2d interpolation
+        # read dat file that contains Mach vs Cd0 relations.
+        # n*2 ndarray. 1st column: Mach numbers, 2nd column: Cd0s. 
+        data = np.loadtxt('bin/Cd0.dat',delimiter=",", skiprows=1)
+        Mach_array = data[:,0]
+        Cd0_array = data[:,1] * ( self.Cd0 / data[0,1] ) # scaling
+        
+        # create 2d interpolation (Mach vs Cd0)
         self.f_cd0 = interpolate.interp1d(Mach_array,Cd0_array,kind='linear')
         
+        # ---- lift coeff. slope ----
+        # setup Cl_alpha (Cl slope wrt AOA) curve as a function of Mach number
+        # Cl_alpha = 10.0 (M=0.3) here, but actural Cl_alpha in the program is scaled by the config input Cl_alpha.
+        
+        # read dat file that contains Mach vs Cl_alpha relations.
+        # n*2 ndarray. 1st column: Mach numbers, 2nd column: Cl_alpha 
+        data = np.loadtxt('bin/Clalpha.dat',delimiter=",", skiprows=1)
+        Mach_array = data[:,0]
+        Clalpha_array = data[:,1] * ( self.Cl_alpha / data[0,1] ) # scaling
+        
+        # create 2d interpolation (Mach vs Cl_alpha        
+        self.f_cl_alpha = interpolate.interp1d(Mach_array,Clalpha_array,kind='linear')
+        
+        # ---- C.P. location ----
+        # import C.P. location data 
+        df = pd.read_csv("bin/CPloc.csv", header=None, na_values='Mach/AOA')
+        Mach_array = np.array(df.iloc[1:,0])  # mach array
+        AOA_array = np.array(df.iloc[0,1:]) * np.pi/180.  # AOA array (convert from deg to rad)
+        # create grid
+        Mach2, AOA2 = np.meshgrid(Mach_array, AOA_array)
+        
+        # CPlocation 2D array (rows: Mach, columns: AOA)
+        CPloc_array = np.array(df.iloc[1:,1:]) 
+        # convert from % to len, and scaling. Use CPloc at M=0.3, AOA=2deg as standard 
+        tmpfunc = interpolate.interp2d(Mach2, AOA2, CPloc_array.T, kind='linear')
+        CPloc_array *= self.CP_body /tmpfunc(0.3, 2*np.pi/180)
+    
+        # create 2d interpolation curve
+        self.f_CPloc = interpolate.interp2d(Mach2, AOA2, CPloc_array.T, kind='linear')
+        
         return None
+    
         
     def state2vecs_quat(self,u):
         # convert state vector u to vectors

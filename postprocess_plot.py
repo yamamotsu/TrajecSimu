@@ -14,14 +14,20 @@ import matplotlib.patches as patches
 import matplotlib.cm as cm
 from PIL import Image
 from mpl_toolkits.mplot3d import Axes3D
+import sympy.geometry as sg
 
 #TODO: Make PostProcess & ResultPlot class
 
 """
 # class for post-processing
 """
+
     
 class PostProcess_dist():
+    
+    def __init__(self, loc):
+        # get launch location: 'izu' or 'noshiro_sea'
+        self.launch_location = loc
     
     # ------------------------------
     # method for setup landing distribution coordinate
@@ -99,6 +105,77 @@ class PostProcess_dist():
         
         return None
         
+    
+
+
+    def set_coordinate_noshiro(self):
+        # !!!! hardcoding for 2018 noshiro umi
+        # Set limit range in maps (Defined by North latitude and East longitude)
+        point_rail = np.array([40.24278611, 140.01028028])
+        point_switch = np.array([40.240382, 140.009295])
+        point_tent = np.array([40.2414098, 140.0100285])
+        point_range = np.array([[40.23665, 140.00579],
+                                [40.27126, 140.00929],
+                                ])
+        point_center = np.array([40.24722278,   139.993889]) #center of circle
+        #point_test1 = np.array([40.24278611, 140.01028028]) #rail
+        #point_test2 = np.array([40.24722278,   139.993889]) #center of circle
+                                
+    
+        # Define convert value from lat/long[deg] to meter[m]
+        origin = point_rail
+        earth_radius = 6378150.0    # [km]
+        lat2met = 2 * math.pi * earth_radius / 360.0
+        lon2met = 2 * math.pi * earth_radius * np.cos(np.deg2rad(origin[0])) / 360.0
+    
+        # Convert from absolute coordinate to relative coordinate
+        point_rail = point_rail - origin
+        point_switch = point_switch - origin
+        point_tent = point_tent - origin
+        point_range = point_range - origin
+        point_center = point_center - origin
+        #point_test1 = point_test1 - origin
+        #point_test2 = point_test2 - origin
+    
+        # Convert from lat/long to meter (ENU coordinate)
+        self.xy_rail = np.zeros(2)
+        self.xy_switch = np.zeros(2)
+        self.xy_tent = np.zeros(2)
+        self.xy_range = np.zeros([point_range[:,0].size, 2])
+        self.xy_center = np.zeros(2)
+        #self.xy_test1 = np.zeros(2)
+        #self.xy_test2 = np.zeros(2)
+    
+        self.xy_switch[1] = lat2met * point_switch[0]
+        self.xy_switch[0] = lon2met * point_switch[1]
+        self.xy_tent[1] = lat2met * point_tent[0]
+        self.xy_tent[0] = lon2met * point_tent[1]
+        self.xy_range[:,1] = lat2met * point_range[:,0] #y of all
+        self.xy_range[:,0] = lon2met * point_range[:,1] #x of all
+        self.xy_center[1] = lat2met * point_center[0]
+        self.xy_center[0] = lon2met * point_center[1]
+        #self.xy_test1[1] = lat2met * point_test1[0]
+        #self.xy_test1[0] = lon2met * point_test1[1]
+        #self.xy_test2[1] = lat2met * point_test2[0]
+        #self.xy_test2[0] = lon2met * point_test2[1]
+        
+       
+        # Set magnetic declination
+        mag_dec = -8.0   # [deg] @ noshiro
+        mag_dec = np.deg2rad(mag_dec)
+        mat_rot = np.array([[np.cos(mag_dec), -1 * np.sin(mag_dec)],
+                            [np.sin(mag_dec), np.cos(mag_dec)]])
+    
+        # Rotate by magnetic declination angle
+        self.xy_switch = mat_rot @ self.xy_switch
+        self.xy_tent = mat_rot @ self.xy_tent
+        #self.xy_test1 = mat_rot @ self.xy_test1
+        #self.xy_test2 = mat_rot @ self.xy_test2
+        
+        for i in range(self.xy_range[:,0].size):
+            self.xy_range[i,:] = mat_rot @ self.xy_range[i,:]
+    
+        return None 
         
     
     
@@ -118,67 +195,157 @@ class PostProcess_dist():
     # method for plot map and landing points
     # ------------------------------
     def plot_map(self):
-    
-        # Set limit range in maps
-        lim_radius = 50.0   # define circle limit area
-        self.set_coordinate_izu()
-    
-        # for tamura version
-        # Set map image
-        img_map = Image.open("./map/Izu_map_mag.png")
-        img_list = np.asarray(img_map)
-        img_height = img_map.size[0]
-        img_width = img_map.size[1]
-        img_origin = np.array([722, 749])    # TODO : compute by lat/long of launcher point
-    
-        #pixel2meter = (139.431463 - 139.41283)/1800.0 * lon2met
-        pixel2meter = 0.946981208125
+     
+        if self.launch_location == 'izu':
+            # Set limit range in maps
+            lim_radius = 50.0   # define circle limit area
+            self.set_coordinate_izu()
         
-        """
-        # for extended version
-        # Set map image
-        img_map = Image.open("./map/map_extended.png")
-        img_list = np.asarray(img_map)
-        img_height = img_map.size[1]
-        img_width = img_map.size[0]
-        img_origin = np.array([231, 284])    # TODO : compute by lat/long of launcher point
+            # for tamura version
+            # Set map image
+            img_map = Image.open("./map/Izu_map_mag.png")
+            img_list = np.asarray(img_map)
+            img_height = img_map.size[0]
+            img_width = img_map.size[1]
+            img_origin = np.array([722, 749])    # TODO : compute by lat/long of launcher point
         
-        pixel2meter = 7.796379
-        # """
-    
-        # Define image range 
-        img_left =   -1.0 * img_origin[0] * pixel2meter
-        img_right = (img_width - img_origin[0]) * pixel2meter
-        img_top = img_origin[1] * pixel2meter
-        img_bottom = -1.0 * (img_height - img_origin[1]) * pixel2meter
-    
-        plt.figure(figsize=(12,10))
-        plt.imshow(img_list, extent=(img_left, img_right, img_bottom, img_top))
-    
-        # plot setting
-        ax = plt.axes()
-        color_line = '#ffff33'    # Yellow
-        color_circle = 'b'    # Red
-    
-        # Set circle object
-        cir_rail = patches.Circle(xy=self.xy_rail, radius=lim_radius, ec=color_circle, fill=False)
-        cir_switch = patches.Circle(xy=self.xy_switch, radius=lim_radius, ec=color_circle, fill=False)
-        cir_tent = patches.Circle(xy=self.xy_tent, radius=lim_radius, ec=color_circle, fill=False)
-        ax.add_patch(cir_rail)
-        ax.add_patch(cir_switch)
-        ax.add_patch(cir_tent)
-    
-        # Write landing permission range
-        plt.plot(self.xy_rail[0], self.xy_rail[1], 'b.', color=color_circle, markersize = 12, label='launcher')
-        plt.plot(self.xy_switch[0], self.xy_switch[1], '.', color=color_circle)
-        plt.plot(self.xy_tent[0], self.xy_tent[1], '.', color=color_circle)
-        plt.plot(self.xy_range[:,0], self.xy_range[:,1], '--', color=color_line)
-        """
-        # plot landing point for 2018/3/23
-        plt.plot(self.xy_land[0], self.xy_land[1], 'r*', markersize = 12, label='actual langing point')
-        """
+            #pixel2meter = (139.431463 - 139.41283)/1800.0 * lon2met
+            pixel2meter = 0.946981208125
+            
+            """
+            # for extended version
+            # Set map image
+            img_map = Image.open("./map/map_extended.png")
+            img_list = np.asarray(img_map)
+            img_height = img_map.size[1]
+            img_width = img_map.size[0]
+            img_origin = np.array([231, 284])    # TODO : compute by lat/long of launcher point
+            
+            pixel2meter = 7.796379
+            # """
+        
+            # Define image range 
+            img_left =   -1.0 * img_origin[0] * pixel2meter
+            img_right = (img_width - img_origin[0]) * pixel2meter
+            img_top = img_origin[1] * pixel2meter
+            img_bottom = -1.0 * (img_height - img_origin[1]) * pixel2meter
+        
+            plt.figure(figsize=(12,10))
+            plt.imshow(img_list, extent=(img_left, img_right, img_bottom, img_top))
+        
+            # plot setting
+            ax = plt.axes()
+            color_line = '#ffff33'    # Yellow
+            color_circle = 'b'    # Red
+        
+            # Set circle object
+            cir_rail = patches.Circle(xy=self.xy_rail, radius=lim_radius, ec=color_circle, fill=False)
+            cir_switch = patches.Circle(xy=self.xy_switch, radius=lim_radius, ec=color_circle, fill=False)
+            cir_tent = patches.Circle(xy=self.xy_tent, radius=lim_radius, ec=color_circle, fill=False)
+            ax.add_patch(cir_rail)
+            ax.add_patch(cir_switch)
+            ax.add_patch(cir_tent)
+        
+            # Write landing permission range
+            plt.plot(self.xy_rail[0], self.xy_rail[1], 'b.', color=color_circle, markersize = 12, label='launcher')
+            plt.plot(self.xy_switch[0], self.xy_switch[1], '.', color=color_circle)
+            plt.plot(self.xy_tent[0], self.xy_tent[1], '.', color=color_circle)
+            plt.plot(self.xy_range[:,0], self.xy_range[:,1], '--', color=color_line)
+            """
+            # plot landing point for 2018/3/23
+            plt.plot(self.xy_land[0], self.xy_land[1], 'r*', markersize = 12, label='actual langing point')
+            """
+
+        elif self.launch_location == 'noshiro_sea':
+            # Set limit range in maps
+            lim_radius = 50.0   # define circle limit area
+            hachiya_radius = 2500.0
+            hachiya_radius2 = 1500.0
+            self.set_coordinate_noshiro()
+        
+            # Set map image
+            img_map = Image.open("./map/noshiro_new.PNG")
+            img_list = np.asarray(img_map)
+            img_height = img_map.size[1]
+            print(img_map.size)
+            img_width = img_map.size[0]
+            img_origin = np.array([396, 321])    # TODO : compute by lat/long of launcher point
+        
+            #pixel2meter 
+            pixel2meter = 14.679803
+        
+            # Define image range 
+            img_left =   -1.0 * img_origin[0] * pixel2meter
+            img_right = (img_width - img_origin[0]) * pixel2meter
+            img_top = img_origin[1] * pixel2meter
+            img_bottom = -1.0 * (img_height - img_origin[1]) * pixel2meter
+        
+            plt.figure(figsize=(10,10))
+            plt.imshow(img_list, extent=(img_left, img_right, img_bottom, img_top))
+            
+            #calculate intersection of permitted circle and line
+            center1 = sg.Point(self.xy_center[0],self.xy_center[1])
+            radius1 = hachiya_radius
+            circle1 = sg.Circle(center1,radius1)
+            center2 = sg.Point(self.xy_center[0],self.xy_center[1])
+            radius2 = hachiya_radius2
+            circle2 = sg.Circle(center2,radius2)
+            line = sg.Line(sg.Point(self.xy_range[0,0],self.xy_range[0,1]), sg.Point(self.xy_range[1,0],self.xy_range[1,1]))
+            
+            result1 = sg.intersection(circle1, line)
+            result2 = sg.intersection(circle2,line)
+            
+            intersection1_1 = np.array([float(result1[0].x), float(result1[0].y)])
+            intersection1_2 = np.array([float(result1[1].x), float(result1[1].y)])
+            intersection2_1 = np.array([float(result2[0].x), float(result2[0].y)])
+            intersection2_2 = np.array([float(result2[1].x), float(result1[1].y)])
+                       
+             #caluculate equation of hachiya_line
+            a = (self.xy_range[1,1]-self.xy_range[0,1])/(self.xy_range[1,0]-self.xy_range[0,0])
+            b = (self.xy_range[0,1]*self.xy_range[1,0]-self.xy_range[1,1]*self.xy_range[0,0])/(self.xy_range[1,0]-self.xy_range[0,0])
+            x = np.arange(intersection1_1[0],intersection1_2[0],1)
+            y = a*x + b 
+            
+            # plot setting
+            ax = plt.axes()
+            color_line = '#ffff33'    # Yellow
+            color_circle = 'r'    # Red
+        
+            # Set circle object
+            cir_rail = patches.Circle(xy=self.xy_rail, radius=lim_radius, ec=color_line, fill=False)
+            #cir_switch = patches.Circle(xy=self.xy_switch, radius=lim_radius, ec=color_circle, fill=False)
+            #cir_tent = patches.Circle(xy=self.xy_tent, radius=lim_radius, ec=color_circle, fill=False)
+            cir_center = patches.Circle(xy=self.xy_center, radius=hachiya_radius, ec=color_circle, fill=False)
+            cir_center2 = patches.Circle(xy=self.xy_center, radius=hachiya_radius2, ec=color_circle, fill=False)
+            ax.add_patch(cir_rail)
+            #ax.add_patch(cir_switch)
+            #ax.add_patch(cir_tent)
+            ax.add_patch(cir_center)
+            ax.add_patch(cir_center2)
+            #cir_test1 = patches.Circle(xy=self.xy_test1, radius=lim_radius, ec=color_line, fill=False)
+            #ax.add_patch(cir_test1)
+            #cir_test2 = patches.Circle(xy=self.xy_test2, radius=lim_radius, ec=color_line, fill=False)
+            #ax.add_patch(cir_test2)
+        
+        
+            # Write landing permission range
+            plt.plot(x,y,"r")  
+            plt.plot(self.xy_rail[0], self.xy_rail[1], '.', color=color_circle)
+            #plt.plot(self.xy_switch[0], self.xy_switch[1], '.', color=color_circle)
+            #plt.plot(self.xy_tent[0], self.xy_tent[1], '.', color=color_circle)
+            #plt.plot(self.xy_range[:,0], self.xy_range[:,1], '--', color=color_line)
+            plt.plot(self.xy_center[0], self.xy_center[1], '.', color=color_circle)
+            #plt.plot(self.xy_test1[0], self.xy_test1[1], '.', color=color_circle)
+            #plt.plot(self.xy_test2[0], self.xy_test2[1], '.', color=color_circle)
+            
+        else:
+            print('Error!! Available location is: izu or noshiro_sea' )
+
+        # END IF
+
         ax.set_aspect('equal')
-    
+
+        return None
     
     def plot_sct(self, drop_point, wind_speed_array, launcher_elev_angle, fall_type):
         # -------------------
@@ -204,20 +371,14 @@ class PostProcess_dist():
     
         title_name = fall_type + ", Launcher elev. " + str(int(launcher_elev_angle)) + " deg"
     
-        """ for normal
+        
         imax = len(wind_speed_array)
         for i in range(imax):
     
             # cmap = plt.get_cmap("winter")
     
             labelname = str(wind_speed_array[i]) + " m/s"
-            plt.plot(drop_point[i,:,0],drop_point[i,:,1], label = labelname, lw=2, color=cm.Oranges(i/imax))
-        """
-        
-        # for izu 2018
-        plt.plot(drop_point[0,0,0],drop_point[0,0,1], 'ws', label='simulated langing point')
-        print('simu landing point:', drop_point[0,0,0],drop_point[0,0,1])
-            
+            plt.plot(drop_point[i,:,0],drop_point[i,:,1], label = labelname, lw=2, color=cm.Oranges(i/imax)) 
             
         # output_name = "output/Figure_elev_" + str(int(rail_elev)) + ".png"
         output_name = 'Figure_' + fall_type + '_elev' + str(int(launcher_elev_angle)) + 'deg.eps'
