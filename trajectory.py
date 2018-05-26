@@ -1066,24 +1066,103 @@ class trajec_main(Rocket):
         
         return T,p,rho,a 
     
+    
     def setup_wind(self):
         # ==============================================
         # set up wind, i.e. wind speed/direction as a function of altitude.
         #   default: power law
         # ==============================================
         
-        def wind_power(h):
+        if self.wind_model == 'power':
+            # -------------------
+            # use power law only
+            # -------------------
+            self.wind = self.wind_power
+            
+        elif self.wind_model == 'power-forecast-hydrid':
+            # -------------------
+            # power law and forecast hybrid model
+            # -------------------
+            try:
+                # import weather forecast info                
+                df = pd.read_csv(self.wind_forecast_csvname)                
+            except:
+                print('ERROR: No Forecast Data Available')
+                
+            # altitude array
+            alt = np.array(df['altitude'])
+            
+            # Wind: west to east (x)
+            wind_W2E_tmp = np.array(df['Wind (from west)']) 
+            # south to north (y)
+            wind_S2N_tmp = np.array(df['Wind (from south)'])
+            # Upward (z)
+            wind_UP = np.array(df['Wind (vertical)'])
+            
+            # magnetic angle correction
+            theta = np.deg2rad(8.9)
+            wind_W2E = wind_W2E_tmp * np.cos(theta) + wind_S2N_tmp* np.sin(theta) 
+            wind_S2N =  - wind_W2E_tmp * np.sin(theta) + wind_S2N_tmp* np.cos(theta) 
+            # set as vector (blowing TO)
+            wind_vec_fore = np.c_[wind_W2E, wind_S2N, wind_UP].T
+            
+            # setup wind_forecast interpolation function
+            self.wind_forecast = interpolate.interp1d(alt, wind_vec_fore, fill_value='extrapolate')
+            
+            # definition of wind power-forecast hybrid method
+            def wind_power_forecast(h):
+                if h < 0.:
+                    h = 0.
+                    
+                boundary_alt = 100.    
+                transition = 20.
+                if h <= boundary_alt - transition:
+                    # use power law only
+                    return self.wind_power(h)
+                elif h <= boundary_alt + transition:
+                    # use both
+                    weight = (h - (boundary_alt-transition) ) / (2*transition)  
+                    return weight*self.wind_forecast(h) + (1.-weight)*self.wind_power(h)
+                else:
+                    # use forecast only
+                    return self.wind_forecast(h)
+                # END IF
+            # END OF DIFINITION
+                
+            self.wind = wind_power_forecast
+            
+            """
+            h = np.linspace(0., 150., 100)
+            winwin = np.zeros((3,100))
+            win_fore = np.zeros((3,100))
+            for i in range(100):
+                winwin[:,i] = self.wind(h[i])
+                win_fore[:,i] = self.wind_forecast(h[i])
+            
+            plt.plot(winwin[0,:], h, label='Hybrid: from west')
+            plt.plot(winwin[1,:], h, label='Hybrid: from south')
+            #plt.plot(win_fore[0,:], h, label='Fore: from west')
+            #plt.plot(win_fore[1,:], h, label='Fore; from south')
+            plt.legend()
+            plt.grid()
+            plt.show()
+            a = 0
+            
+            """
+            
+            
+    # definition of wind power law 
+    def wind_power(self, h):
             if h<0.:
-                h = 0
+                h = 0.
             # END IF
         
-            # wind velocity in local fixed coordinate
+            # wind velocity in local fixed coordinate (wind vector = direction blowing TO. Wind from west = [1,0,0])
             wind_vec = self.wind_unitvec * self.wind_speed * (h/self.wind_alt_std)**self.Cwind  
 
             return wind_vec
-        
-        self.wind = wind_power
-        
+    
+
         
         
     def aero_coeff(self, Mach,alpha):

@@ -100,6 +100,9 @@ class Rocket():
                             'wind_power_coeff' : 7.,
                             'wind_alt_std'     : 10.,      # alt. at which the wind speed is given [m]
                             
+                            # wind model
+                            'wind_model'       : 'power',  # 'power for Wind Power Method, 'power-forecast-hydrid' for power-forecast hybrid'
+                            
     
                             # -----------------------------
                             # rocket aerodynamic parameters
@@ -188,6 +191,10 @@ class Rocket():
             self.wind_speed = float( self.params_dict['wind_speed'] )         # speed of wind [m/s] at 10m alt.
             self.Cwind = 1./float( self.params_dict['wind_power_coeff'] )   # wind power coefficient
             self.wind_alt_std = float( self.params_dict['wind_alt_std'])
+            self.wind_model = self.params_dict['wind_model']
+            if self.wind_model == 'power-forecast-hydrid':
+                self.wind_forecast_csvname = self.params_dict['forecast_csvname']
+            
             # earth gravity
             self.grav = np.array([0.,0.,-9.81])    # in fixed coordinate
             
