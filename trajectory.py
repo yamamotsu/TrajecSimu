@@ -38,8 +38,8 @@ class trajec_main(Rocket):
         self.overwrite_parameters(params_df)   
         
         # initialize a dict for result
-        self.res_trajec_main = {'v_para_deploy': -1, 'v_launch_clear': -1}
-
+        self.res_trajec_main = {'v_para_deploy': -1}  #, 'v_launch_clear': -1}
+        
         return None     
 
         
@@ -77,8 +77,10 @@ class trajec_main(Rocket):
         # set flag = 1 (on launch rail)
         self.flag = 1
         
-        # setup aerocoeff interpolation curve
+        # setup aerocoeff interpolation curves
         self.setup_aero_coeffs()
+        # setup wind 
+        self.setup_wind()
     
         """
         print('----------------------------')
@@ -246,26 +248,57 @@ class trajec_main(Rocket):
         # ----------------------------
         #   flight mode classification
         # ----------------------------
-        if self.flag==1 and x[2] > self.rail_height:
-            # detect launch clear
+        
+        """
+        if self.flag==1 and self.flag_1stlug==0 and x[2] > self.rail_height - 2.:
+            # detect 1st lug clear
+            # then, start rotating
+            # get air speed and AoA
+            air_speed, _, AoA, _ = self.air_state(x,v,Tbl)
+            print('----------------------------')
+            print('  1st lugt clear at t = ',np.round(t, 5),'[s], start rotating')
+            print(' height, ', x[2])
+            print('  ground speed: ',np.round(np.linalg.norm(v), 2),'[m/s]')
+            print('  true air speed: ', np.round(air_speed, 2), '[m/s], AoA: ', np.round(AoA*180./np.pi, 3), '[deg]')
+            print('----------------------------')
+            print(' ')
+            self.flag_1stlug = 1
+        """
+        
+        
+        if self.flag==1 and x[2] > self.height_1stlug_off:
+            # detect 1st launch lug off the rail 
+            #  -> rocket starts rotation around 2nd-lug, but no translation
 
             # get air speed and AoA
             air_speed, _, AoA, _ = self.air_state(x,v,Tbl)
             print('----------------------------')
-            print('  Launcher-clear at t = ',np.round(t, 2),'[s]')
+            print('  1st lug launcher-clear at t = ',np.round(t, 5),'[s]')
             print('  ground speed: ',np.round(np.linalg.norm(v), 2),'[m/s]')
-            print('  true air speed: ', np.round(air_speed, 2), '[m/s], AoA: ', np.round(AoA*180./np.pi, 3), '[deg]')
+            print('  true air speed: ', np.round(air_speed, 2), '[m/s], AoA: ', np.round(np.rad2deg(AoA), 3), '[deg]')
             print('----------------------------')
             print(' ')
             
             # record history
             self.add_backup(t,u)
             # record launch clear air speed
-            self.res_trajec_main.update( { 'v_launch_clear' : air_speed } )
-            # switch into thrusted flight
-            self.flag = 2   
+            # self.res_trajec_main.update( { 'v_launch_clear' : air_speed } )
             
-        elif (self.flag==1 or self.flag==2) and t >= self.t_MECO:
+            # switch into "tip-offed but not launch cleared" phase
+            self.flag = 1.1   
+            
+            
+        elif self.flag <= 1.1 and x[2] > self.height_2ndlug_off:
+            # detect 2nd launch lug off the rail.
+            #  -> rocket starts translation and rotation around CG
+            self.flag = 2.
+            
+            """
+            elif self.flag <= 1.2 and x[2] > self.height_nozzle_off:
+                # detect nozzle off the rail height
+            """    
+            
+        elif self.flag <= 2 and t >= self.t_MECO:
             # detect MECO
 
             print('----------------------------')
@@ -292,7 +325,7 @@ class trajec_main(Rocket):
             print('  1st parachute deployed at t = ', np.round(t, 2), '[s]')
             print('  current altitude: ', np.round(x[2], 2), '[m]')
             print('  ground speed:    ', np.round(np.linalg.norm(v), 2), '[m/s]')
-            print('  true air speed: ', np.round(air_speed, 2), '[m/s], AoA: ', np.round(AoA*180./np.pi, 3), '[deg]')
+            print('  true air speed: ', np.round(air_speed, 2), '[m/s], AoA: ', np.round(np.rad2deg(AoA), 3), '[deg]')
             print('  air density: ', np.round(rho_tmp,3) , '[kg/m^3], pressure: ', np.round(p_tmp,1) ,'[Pa]')
             print('----------------------------')
             print(' ')
@@ -389,8 +422,8 @@ class trajec_main(Rocket):
         # self.record_tmp = np.append(self.record_tmp, aeroF[0])
     
         # set external force depending on the state
-        if self.flag == 1:
-            # on launch rail -> du/dx only. Consider rail-rocket friction force 
+        if self.flag <= 1.1:
+            # ug on the rail -> du/dx only. Consider rail-rocket friction force 
             # total acceleration 
             dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.grav) + (aeroF + self.thrust(t) + self.friction() ) / mass
             # cancell out y,z
@@ -449,10 +482,25 @@ class trajec_main(Rocket):
         #             ThrustM   = ThrustM(t)=0: function of time
         
         if self.flag == 1 or self.flag == 3.5 or self.flag == 4:
-            # on launch rail /parachute deployed -> no angular velocity change
+            # both lug on the rail /parachute deployed -> no angular velocity change
             domega_dt = np.zeros(3)
-
+            
+       
+        
         else:
+            if self.flag == 1.1:
+                # 2nd lug on the rail. rotate around this point. Add addtitonal moment
+                # aerodynamic moment correction: move center of rotation from CG > 2nd lug (currently ignore damping correction)
+                aeroM_around_2ndlug = aeroM + np.cross( np.array([self.lug_2nd - CG,0.,0.]) , aeroF )
+                # gravitaional moment around CG
+                grav_body = mass * np.dot(Tbl, self.grav)  # gravity in body coord.
+                gravM_around_2ndlug = np.cross( np.array([self.lug_2nd - CG,0.,0.]) , grav_body)
+                # overwrite "aeroM"
+                aeroM = aeroM_around_2ndlug + gravM_around_2ndlug
+                # convert moment of inertia using parallel axis foram
+                MOI += mass * np.array( [0., self.lug_2nd - CG, self.lug_2nd - CG ])**2.
+            # END IF
+            
             # MOI1 = MOI(t)           # moment of inertia     
             # d_dt_MOI1 = d_dt_MOI(t) # time derivative of MOI
             # aeroM1 = aeroM(u)       # aerodynamic moment
@@ -649,7 +697,7 @@ class trajec_main(Rocket):
         force_all = 0.5 * rho * air_speed**2. * self.X_area * (-C)
         
         # aerodynamic moment wrt CG
-        moment_all = np.cross( np.array([CG - CPloc[0],0.,0.]) , force_all )
+        moment_all = np.cross( np.array([CG - CPloc[0,0],0.,0.]) , force_all )
         
         # add aerodynamic damping effect  (note: Cm_omega < 0)
         moment_all += 0.25 * rho * air_speed * self.Cm_omega_bar * omega
@@ -1004,6 +1052,8 @@ class trajec_main(Rocket):
             
         else:
             T110,p110,_,_ = self.standard_air(110000.)
+            T = T110
+            p = p110
             
         #END IF
         
@@ -1015,24 +1065,24 @@ class trajec_main(Rocket):
         a = np.sqrt(1.4*R*T) # [m/s]
         
         return T,p,rho,a 
-        
     
-    def wind(self,h):
+    def setup_wind(self):
         # ==============================================
-        # returns wind vector given an altitude
-        #  follows "wind profile power law"
-        #
-        # INPUT: h = altitude [m]
+        # set up wind, i.e. wind speed/direction as a function of altitude.
+        #   default: power law
         # ==============================================
         
-        if h<0.:
-            h = 0
-        # END IF
+        def wind_power(h):
+            if h<0.:
+                h = 0
+            # END IF
         
-        # wind velocity in local fixed coordinate
-        wind_vec = self.wind_unitvec * self.wind_speed * (h/self.wind_alt_std)**self.Cwind  
+            # wind velocity in local fixed coordinate
+            wind_vec = self.wind_unitvec * self.wind_speed * (h/self.wind_alt_std)**self.Cwind  
 
-        return wind_vec
+            return wind_vec
+        
+        self.wind = wind_power
         
         
         
@@ -1058,7 +1108,10 @@ class trajec_main(Rocket):
             k1 = 1.
         # END IF
         """
-        Cl = self.f_cl_alpha(Mach) * np.sin(2.*alpha)
+        # self.f_cl_alpha(Mach) = slope near AOA=0
+        # shape will be lile sin(2*alpha), which means Cl=0 at 90deg
+        # therefore, multiply 0.5 to realized the shape sin(2*alpha) as well as slope|AOA=0 = Cl_alpha
+        Cl = self.f_cl_alpha(Mach) * 0.5* np.sin(2*alpha)
         
         # -------------------
         # Drag Coefficient
@@ -1086,54 +1139,84 @@ class trajec_main(Rocket):
 
     def setup_aero_coeffs(self):
         # ==============================================
-        # set up aerodynamic coefficients and C.P. location
+        # set up aerodynamic coefficients and C.P. location interpolations (default)
         # Put following .dat files in /bin
         #   Cd0.dat:     Mach numbers vs. Cd0 
         #   Clalpha.dat: Mach numbers vs. Clalpha
+        #
+        # if self.Mach_AOA_dependent = False, set up simple function that returns constant Cd0, Cl_alpha, and CP location.
         # ==============================================
         
-        # ---- drag coeff. at 0 AOA ----
-        # setup Cd0 (Cd at AOA=0) curve as a function of Mach number
-        # Cd0 = 0.6 here, but actural Cd in the program is scaled by the config input Cd0.
+        if self.Mach_AOA_dependent:
+            # When true, setup interpolation curves to represent 
+            # aero coeff dependency on Mach / AOA
+            # --------------------------
+            # drag coeff. at 0 AOA
+            # --------------------------
+            # setup Cd0 (Cd at AOA=0) curve as a function of Mach number
+            # Cd0 = 0.6 here, but actural Cd in the program is scaled by the config input Cd0.
+            
+            # read dat file that contains Mach vs Cd0 relations.
+            # n*2 ndarray. 1st column: Mach numbers, 2nd column: Cd0s. 
+            data = np.loadtxt('bin/Cd0.dat',delimiter=",", skiprows=1)
+            Mach_array = data[:,0]
+            Cd0_array = data[:,1] * ( self.Cd0 / data[0,1] ) # scaling
+            
+            # create 2d interpolation (Mach vs Cd0)
+            self.f_cd0 = interpolate.interp1d(Mach_array,Cd0_array,kind='linear')
+            
+            # --------------------------
+            # lift coeff. slope
+            # --------------------------
+            # setup Cl_alpha (Cl slope wrt AOA) curve as a function of Mach number
+            # Cl_alpha = 10.0 (M=0.3) here, but actural Cl_alpha in the program is scaled by the config input Cl_alpha.
+            
+            # read dat file that contains Mach vs Cl_alpha relations.
+            # n*2 ndarray. 1st column: Mach numbers, 2nd column: Cl_alpha 
+            data = np.loadtxt('bin/Clalpha.dat',delimiter=",", skiprows=1)
+            Mach_array = data[:,0]
+            Clalpha_array = data[:,1] * ( self.Cl_alpha / data[0,1] ) # scaling
+            
+            # create 2d interpolation (Mach vs Cl_alpha        
+            self.f_cl_alpha = interpolate.interp1d(Mach_array,Clalpha_array,kind='linear')
+            
+            # --------------------------
+            # C.P. location 
+            # --------------------------
+            # import C.P. location data 
+            df = pd.read_csv("bin/CPloc.csv", header=None, na_values='Mach/AOA')
+            Mach_array = np.array(df.iloc[1:,0])  # mach array
+            AOA_array = np.array(df.iloc[0,1:]) * np.pi/180.  # AOA array (convert from deg to rad)
+            # create grid
+            Mach2, AOA2 = np.meshgrid(Mach_array, AOA_array)
+            
+            # CPlocation 2D array (rows: Mach, columns: AOA)
+            CPloc_array = np.array(df.iloc[1:,1:]) 
+            # convert from % to len, and scaling. Use CPloc at M=0.3, AOA=2deg as standard 
+            # tmpfunc = interpolate.interp2d(Mach2, AOA2, CPloc_array.T, kind='linear')
+            tmpfunc = interpolate.RectBivariateSpline(Mach_array, AOA_array, CPloc_array)
+            CPloc_array *= self.CP_body /tmpfunc(0.3, np.deg2rad(2.))
         
-        # read dat file that contains Mach vs Cd0 relations.
-        # n*2 ndarray. 1st column: Mach numbers, 2nd column: Cd0s. 
-        data = np.loadtxt('bin/Cd0.dat',delimiter=",", skiprows=1)
-        Mach_array = data[:,0]
-        Cd0_array = data[:,1] * ( self.Cd0 / data[0,1] ) # scaling
-        
-        # create 2d interpolation (Mach vs Cd0)
-        self.f_cd0 = interpolate.interp1d(Mach_array,Cd0_array,kind='linear')
-        
-        # ---- lift coeff. slope ----
-        # setup Cl_alpha (Cl slope wrt AOA) curve as a function of Mach number
-        # Cl_alpha = 10.0 (M=0.3) here, but actural Cl_alpha in the program is scaled by the config input Cl_alpha.
-        
-        # read dat file that contains Mach vs Cl_alpha relations.
-        # n*2 ndarray. 1st column: Mach numbers, 2nd column: Cl_alpha 
-        data = np.loadtxt('bin/Clalpha.dat',delimiter=",", skiprows=1)
-        Mach_array = data[:,0]
-        Clalpha_array = data[:,1] * ( self.Cl_alpha / data[0,1] ) # scaling
-        
-        # create 2d interpolation (Mach vs Cl_alpha        
-        self.f_cl_alpha = interpolate.interp1d(Mach_array,Clalpha_array,kind='linear')
-        
-        # ---- C.P. location ----
-        # import C.P. location data 
-        df = pd.read_csv("bin/CPloc.csv", header=None, na_values='Mach/AOA')
-        Mach_array = np.array(df.iloc[1:,0])  # mach array
-        AOA_array = np.array(df.iloc[0,1:]) * np.pi/180.  # AOA array (convert from deg to rad)
-        # create grid
-        Mach2, AOA2 = np.meshgrid(Mach_array, AOA_array)
-        
-        # CPlocation 2D array (rows: Mach, columns: AOA)
-        CPloc_array = np.array(df.iloc[1:,1:]) 
-        # convert from % to len, and scaling. Use CPloc at M=0.3, AOA=2deg as standard 
-        tmpfunc = interpolate.interp2d(Mach2, AOA2, CPloc_array.T, kind='linear')
-        CPloc_array *= self.CP_body /tmpfunc(0.3, 2*np.pi/180)
-    
-        # create 2d interpolation curve
-        self.f_CPloc = interpolate.interp2d(Mach2, AOA2, CPloc_array.T, kind='linear')
+            # create 2d interpolation curve
+            self.f_CPloc =interpolate.RectBivariateSpline(Mach_array, AOA_array, CPloc_array)
+            
+        else:
+            def f_cd0(a):
+                 # constant Cd0
+                return self.Cd0
+            
+            def f_cl_alpha(a):
+                # constant Cl_alpha
+                return self.Cl_alpha
+            
+            def f_CPloc(a,b):
+                # constant CPlocation
+                return np.array([self.CP_body])
+            
+            self.f_cd0 = f_cd0
+            self.f_cl_alpha = f_cl_alpha
+            self.f_CPloc = f_CPloc
+        # END IF
         
         return None
     

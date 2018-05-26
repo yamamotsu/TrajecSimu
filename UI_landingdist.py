@@ -279,7 +279,7 @@ class TrajecSimu_UI():
         
         
         # define output file name
-        output_name = 'output_' + str(int(self.myrocket.trajectory.elev_angle)) + 'deg.xlsx'
+        output_name = 'results/output_' + str(int(self.myrocket.trajectory.elev_angle)) + 'deg.xlsx'
         excel_file = pd.ExcelWriter(output_name)
  
         # write dataframe with sheet name
@@ -297,8 +297,12 @@ class TrajecSimu_UI():
         bal_judge.to_excel(excel_file, '弾道判定 ')
         para_judge.to_excel(excel_file, 'パラ判定 ')
         
-        # 書き出した内容を保存する
-        excel_file.save()
+        # save excel file
+        try:    
+            excel_file.save()
+        except:
+            subprocess.run(['mkdir', 'results'])
+            excel_file.save()
         
         return None
     

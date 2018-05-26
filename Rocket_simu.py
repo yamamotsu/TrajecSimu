@@ -13,6 +13,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy import fftpack, interpolate, integrate, optimize
 import pandas as pd
 import subprocess
+import quaternion
 
 # class
 class Rocket():
@@ -45,7 +46,7 @@ class Rocket():
         self.get_default()   
         self.overwrite_parameters(self.params_df)
         
-        # initialize a dict for result
+        # initialize a dict for results
         self.res = {}
 
         return None      
@@ -91,10 +92,10 @@ class Rocket():
                             'latitude'       : 35.,      # latitude of launch point [deg]
                                 
                             # atmosphere property
-                            'T0'             : 288.,    # temperature at 10m altitude [K] 
+                            'T0'             : 298.,    # temperature at 10m altitude [K] 
                             'p0'             : 1.013e5, # pressure  at 10m alt. [Pa]
                             # wind property
-                            'wind_direction'   : 0.,      # azimuth where wind is blowing from 
+                            'wind_direction'   : 0.,      # azimuth where wind is blowing FROM
                             'wind_speed'       : 4.,      # wind speed at 'wind_alt_std' alt. [m/s] 
                             'wind_power_coeff' : 7.,
                             'wind_alt_std'     : 10.,      # alt. at which the wind speed is given [m]
@@ -103,11 +104,13 @@ class Rocket():
                             # -----------------------------
                             # rocket aerodynamic parameters
                             # ----------------------------- 
-                            'aero_fin_mode'    : 'integ',  # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
-                            'Cd0'              : 0.6,      # drag coefficient at Mach 0.1, AoA = 0deg
-                            'Cmp'              : -0.,      # stability derivative of rolling moment coefficient (aerodynamic damping)
-                            'Cmq'              : -3.,     # stability derivative of pitching/yawing moment coefficient (aerodynamic damping)
-                            'Cl_alpha'         : 10.,      # lift coefficient slope for small AoA
+                            'aero_fin_mode'     : 'integ',  # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
+                            'Cd0'               : 0.6,      # drag coefficient at Mach 0.1, AoA = 0deg
+                            'Cmp'               : -0.,      # stability derivative of rolling moment coefficient (aerodynamic damping)
+                            'Cmq'               : -4.,     # stability derivative of pitching/yawing moment coefficient (aerodynamic damping)
+                            'Cl_alpha'          : 15.,      # lift coefficient slope for small AoA [1/rad]
+                            'Mach_AOA_dependent': True,     # True if aerodynamic parameter depends on Mach/AOA, False if ignore 
+                            
 
                             # -----------------------------
                             # rocket engine parameters
@@ -170,10 +173,9 @@ class Rocket():
             rail_length = float( self.params_dict['rail_length'] )            # length of launch rail 
             self.elev_angle = float( self.params_dict['elev_angle'] )         # angle of elevation [deg]
             self.azimuth = float( self.params_dict['azimuth'] )               # north=0, east=90, south=180, west=270 [deg]
-            self.rail_height = rail_length * np.sin(self.elev_angle * np.pi/180.) # height of launch rail in fixed coord.
-    
+            self.rail_height = rail_length * np.sin(np.deg2rad(self.elev_angle)) # height of launch rail in fixed coord.
             # launch point property
-            self.omega_earth = np.array([0., 0., -7.29e-5*np.sin( np.pi/180. * float(self.params_dict['latitude'])) ])
+            self.omega_earth = np.array([0., 0., -7.29e-5*np.sin( np.deg2rad( float(self.params_dict['latitude']) ) ) ])
             
             # atmosphere property
             self.T0 = float( self.params_dict['T0'] )  # temperature [K] at 10m alt.
@@ -181,7 +183,7 @@ class Rocket():
             
             # wind property
             wind_direction = float( self.params_dict['wind_direction'] )  # azimuth where wind is blowing from [deg]
-            angle_wind = (-wind_direction + 90.) * np.pi/180.    # angle to which wind goes (x orients east, y orients north)
+            angle_wind = np.deg2rad( (-wind_direction + 90.) )            # angle to which wind goes (x orients east, y orients north)
             self.wind_unitvec = -np.array([np.cos(angle_wind), np.sin(angle_wind) ,0.])
             self.wind_speed = float( self.params_dict['wind_speed'] )         # speed of wind [m/s] at 10m alt.
             self.Cwind = 1./float( self.params_dict['wind_power_coeff'] )   # wind power coefficient
@@ -228,6 +230,7 @@ class Rocket():
             self.X_area = np.pi*rocket_diameter**2. /4.  # cross-sectional area
             self.Cl_alpha = float( self.params_dict['Cl_alpha'] )   
             
+            self.Mach_AOA_dependent = self.params_dict['Mach_AOA_dependent']
             self.aero_fin_mode = self.params_dict['aero_fin_mode'].strip()  # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
             
             # aerodynamic damping moment coefficient]
@@ -253,7 +256,32 @@ class Rocket():
             # display error message
             print('Error in aerodynamic property parameters')
             sys.exit()
+        # -----------------------------
+        # Tip-Off properties
+        # ----------------------------- 
+        # location of 1st and 2nd lug (from nose tip)
+        
+        # override
+        try:
+            lug_1st = float( self.params_dict['lug_1st'] )  
+            self.lug_2nd = float( self.params_dict['lug_2nd'] )  
+        except:
+            # set default values
+            lug_1st = 0.3 * rocket_height
+            self.lug_2nd = 0.8 * rocket_height
             
+        # initial CG
+        CG_init = ( self.m_dry*self.CG_dry + self.m_prop*self.CG_prop) / (self.m_dry+self.m_prop)
+        # when CG point is above "height_1stlug_off", 1st lug is off the rail
+        self.height_1stlug_off = (rail_length - (CG_init - lug_1st) ) * np.sin(np.deg2rad(self.elev_angle))
+        # when CG point is above "height_2ndlug_off", 2nd lug is off the rail
+        self.height_2ndlug_off = (rail_length + (self.lug_2nd - CG_init) ) * np.sin(np.deg2rad(self.elev_angle))
+        #
+        self.height_nozzle_off = (rail_length + (rocket_height - CG_init) ) * np.sin(np.deg2rad(self.elev_angle))
+        
+        # -----------------------------
+        # Engine properties
+        # -----------------------------    
         try:
             self.thrust_input_type = self.params_dict['thrust_input_type'].strip() 
             self.thrust_mag_factor = float(self.params_dict['thrust_mag_factor'] )
@@ -517,7 +545,7 @@ class Rocket():
             self.echo_thrust()
             # get landing location
             self.get_landing_location() 
-            # get max values
+            # get flight details
             self.get_flight_detail(time)
             
         elif process_type == 'all':
@@ -541,6 +569,7 @@ class Rocket():
             
             # get landing location
             self.get_landing_location(True)
+            
             # get flight detail
             self.get_flight_detail(time,True)
             
@@ -558,13 +587,131 @@ class Rocket():
             
             # show all plots
             plt.show()
-                
+            
+            """
+            # output csv file of 1st 3 seconds (launch clear)
+            head = 'time, x, y, z, u, v, w, q1, q2, q3, q4, p, q, r'
+            output_log = np.c_[ time[time<3.], self.trajectory.solution[time<3., :]]
+            try:    
+                np.savetxt('results/log_first3s.csv', output_log, header=head, delimiter=', ')
+            except:
+                subprocess.run(['mkdir', 'results'])
+                np.savetxt('results/log_first3s.csv', output_log, header=head, delimiter=', ')
+            """
+            
         else:
             # if input variable "process_type" is incorrect, show error message
             print('error: process_type must be "location" or "max" or "all". ')
         #END IF
         
         return None
+    
+    def launch_clear_v(self, time, flag_tipoff = False):
+        # =============================================
+        # this method returns launch clear velocity
+        # =============================================
+        # if detail = True, echo and compute tip-off rotation
+        
+        
+        # use initial 5sec data
+        indices = time<5.
+        time = time[indices]
+        sol = self.trajectory.solution[indices,:]
+            
+        # --------------------
+        #   launch clear info
+        # --------------------
+        # cut off info after launch clear
+        indices = sol[:,2] <= self.rail_height
+        time_tmp = time[indices]
+        sol_tmp = sol[indices, :]
+        
+        # vector values at nozzle clear
+        x,v,q,omega = self.trajectory.state2vecs_quat(sol_tmp[-1,:])
+        Tbl = quaternion.as_rotation_matrix(np.conj(q))
+        # get nozzle clear air speed
+        air_speed_clear, _, AoA, _ = self.trajectory.air_state(x,v,Tbl)
+        
+        self.launch_clear_airspeed = air_speed_clear
+        self.launch_clear_time = time_tmp[-1]
+        
+        
+        # compute tip-off rotation
+        if flag_tipoff:
+            # --------------------
+            #   nozzle clear info
+            # --------------------
+            # cut off info after nozzle clear
+            indices = sol[:,2] <= self.height_nozzle_off
+            time = time[indices]
+            sol = sol[indices, :]
+            
+            # vector values at nozzle clear
+            x,v,q,omega = self.trajectory.state2vecs_quat(sol[-1,:])
+            Tbl = quaternion.as_rotation_matrix(np.conj(q))
+            # get nozzle clear air speed
+            air_speed_nozzle_clear, _, AoA_nozzle_clear, _ = self.trajectory.air_state(x,v,Tbl)
+            # get euler angle at nozzle clear
+            Euler_nozzle_clear = quaternion.as_euler_angles(q)
+            # nozzle off time
+            time_nozzle_off = time[-1]
+            
+            # --------------------
+            #   2nd lug clear info
+            # --------------------
+            # cut off info after nozzle clear
+            indices = sol[:,2] <= self.height_2ndlug_off
+            time = time[indices]
+            sol = sol[indices, :]
+            
+            # vector values at 2nd lug clear
+            x,v,q,omega = self.trajectory.state2vecs_quat(sol[-1,:])
+            Tbl = quaternion.as_rotation_matrix(np.conj(q))
+            # get nozzle clear air speed
+            air_speed_2ndlug_clear, _, AoA_2ndlug_clear, _ = self.trajectory.air_state(x,v,Tbl)
+            # get euler angle at 2ndlug clear
+            Euler_2ndlug_clear = quaternion.as_euler_angles(q)
+            # 2nd lug off time
+            time_2ndlug_off = time[-1]
+        
+            # --------------------
+            #   1st lug clear info
+            # --------------------
+            # cut off info befor 1st lug of
+            indices = sol[:,2] >= self.height_1stlug_off
+            time = time[indices]
+            sol = sol[indices, :]
+            
+            # vector values at 2nd lug clear
+            x,v,q,omega = self.trajectory.state2vecs_quat(sol[0,:])
+            Tbl = quaternion.as_rotation_matrix(np.conj(q))
+            # get nozzle clear air speed
+            air_speed_1stlug_clear, _, AoA_1stlug_clear, _ = self.trajectory.air_state(x,v,Tbl)
+            # get euler angle at 2ndlug clear
+            Euler_1stlug_clear = quaternion.as_euler_angles(q)
+            # 2nd lug off time
+            time_1stlug_off = time[0]
+            
+            # --------------------
+            # compute tip off 
+            # --------------------
+            Euler_1st_2nd = np.rad2deg ( Euler_2ndlug_clear - Euler_1stlug_clear )  # deg
+            Euler_2nd_noz = np.rad2deg ( Euler_nozzle_clear - Euler_2ndlug_clear )  # deg
+            
+        
+            print('--------------------')
+            print(' Tip-off effect summary')
+            print(' 1st lug clear at t=', "{0:.5f}".format(time_1stlug_off), '[s], airspeed=', "{0:.3f}".format(air_speed_1stlug_clear), '[m/s], AoA=', "{0:.3f}".format(np.rad2deg(AoA_1stlug_clear)), ' [deg]')
+            print(' 2nd lug clear at t=', "{0:.5f}".format(time_2ndlug_off), '[s], airspeed=', "{0:.3f}".format(air_speed_2ndlug_clear), '[m/s], AoA=', "{0:.3f}".format(np.rad2deg(AoA_2ndlug_clear)), ' [deg]')
+            print(' nozzle  clear at t=', "{0:.5f}".format(time_nozzle_off), '[s], airspeed=', "{0:.3f}".format(air_speed_nozzle_clear), '[m/s], AoA=', "{0:.3f}".format(np.rad2deg(AoA_nozzle_clear)), ' [deg]')
+            np.set_printoptions(formatter={'float': '{: 0.3e}'.format})
+            print(' rotation Euler angle [deg] for 1stlug>2ndlug: ', Euler_1st_2nd, ' / 2ndlug>nozzle: ', Euler_2nd_noz )
+            print('--------------------')
+        
+        
+        
+        
+        
         
     def echo_thrust(self,show=False):
         # =============================================
@@ -650,6 +797,9 @@ class Rocket():
         # this method gets flight detail (max values of M, q, speed, altitude)
         # =============================================
         
+        # get launch clear and tip-off info
+        self.launch_clear_v(time, show)
+        
         # array of rho, a histories: use standard air
         n = len(self.trajectory.solution[:,2])
         T = np.zeros(n)
@@ -693,6 +843,7 @@ class Rocket():
                     'max_speed': np.array([speed[v_max], time[v_max]]),                      # max. speed
                     'max_altitude'  : np.array([self.trajectory.solution[h_max,2], time[h_max]]), # max. altitude
                     'total_flight_time': self.trajectory.landing_time,                       # total flight time
+                    'launch_clear_v': self.launch_clear_airspeed,
                     'max_Q_all'  : maxq_dict,
                     }
         tmp_dict.update( self.trajectory.res_trajec_main )  # add results from trajectory
@@ -706,6 +857,7 @@ class Rocket():
             print(' Max. speed: ', "{0:.1f}".format(speed[v_max]),'[m/s] at t=',"{0:.2f}".format(time[v_max]),'[s]')
             print(' Max. altitude: ', "{0:.1f}".format(self.trajectory.solution[h_max,2]), '[m] at t=',"{0:.2f}".format(time[h_max]),'[s]')
             print(' total flight time: ', "{0:.2f}".format(self.trajectory.landing_time),'[s]')
+            print(' launch clear velocity: ',  "{0:.2f}".format(self.launch_clear_airspeed),'[m/s] at t=',  "{0:.2f}".format(self.launch_clear_time),'[s]')
             print('----------------------------')
             
             # output flight condition at Max.Q

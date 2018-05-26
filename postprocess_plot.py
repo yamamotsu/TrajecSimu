@@ -6,7 +6,8 @@ Created on Thu Feb  8 15:29:08 2018
 @author: shugo
 """
 
-import os
+# import os
+import subprocess
 import math
 import numpy as np
 import matplotlib.pyplot as plt
@@ -230,27 +231,32 @@ class PostProcess_dist():
             img_top = img_origin[1] * pixel2meter
             img_bottom = -1.0 * (img_height - img_origin[1]) * pixel2meter
         
-            plt.figure(figsize=(12,10))
-            plt.imshow(img_list, extent=(img_left, img_right, img_bottom, img_top))
-        
+            
+            fig = plt.figure(figsize=(12,10))
+                        
             # plot setting
-            ax = plt.axes()
+            ax = fig.add_subplot(111)
             color_line = '#ffff33'    # Yellow
-            color_circle = 'b'    # Red
+            color_circle = 'r'    # Red
         
             # Set circle object
+            
             cir_rail = patches.Circle(xy=self.xy_rail, radius=lim_radius, ec=color_circle, fill=False)
             cir_switch = patches.Circle(xy=self.xy_switch, radius=lim_radius, ec=color_circle, fill=False)
             cir_tent = patches.Circle(xy=self.xy_tent, radius=lim_radius, ec=color_circle, fill=False)
             ax.add_patch(cir_rail)
             ax.add_patch(cir_switch)
             ax.add_patch(cir_tent)
-        
+            
+            # plot map
+            plt.imshow(img_list, extent=(img_left, img_right, img_bottom, img_top))
+            
             # Write landing permission range
-            plt.plot(self.xy_rail[0], self.xy_rail[1], 'b.', color=color_circle, markersize = 12, label='launcher')
+            plt.plot(self.xy_rail[0], self.xy_rail[1], 'r.', color=color_circle, markersize = 12)
             plt.plot(self.xy_switch[0], self.xy_switch[1], '.', color=color_circle)
             plt.plot(self.xy_tent[0], self.xy_tent[1], '.', color=color_circle)
             plt.plot(self.xy_range[:,0], self.xy_range[:,1], '--', color=color_line)
+        
             """
             # plot landing point for 2018/3/23
             plt.plot(self.xy_land[0], self.xy_land[1], 'r*', markersize = 12, label='actual langing point')
@@ -267,7 +273,7 @@ class PostProcess_dist():
             img_map = Image.open("./map/noshiro_new.PNG")
             img_list = np.asarray(img_map)
             img_height = img_map.size[1]
-            print(img_map.size)
+            # print(img_map.size)
             img_width = img_map.size[0]
             img_origin = np.array([396, 321])    # TODO : compute by lat/long of launcher point
         
@@ -280,8 +286,7 @@ class PostProcess_dist():
             img_top = img_origin[1] * pixel2meter
             img_bottom = -1.0 * (img_height - img_origin[1]) * pixel2meter
         
-            plt.figure(figsize=(10,10))
-            plt.imshow(img_list, extent=(img_left, img_right, img_bottom, img_top))
+            fig = plt.figure(figsize=(10,10))
             
             #calculate intersection of permitted circle and line
             center1 = sg.Point(self.xy_center[0],self.xy_center[1])
@@ -307,10 +312,10 @@ class PostProcess_dist():
             y = a*x + b 
             
             # plot setting
-            ax = plt.axes()
+            ax = fig.add_subplot(111)
             color_line = '#ffff33'    # Yellow
             color_circle = 'r'    # Red
-        
+            
             # Set circle object
             cir_rail = patches.Circle(xy=self.xy_rail, radius=lim_radius, ec=color_line, fill=False)
             #cir_switch = patches.Circle(xy=self.xy_switch, radius=lim_radius, ec=color_circle, fill=False)
@@ -327,6 +332,8 @@ class PostProcess_dist():
             #cir_test2 = patches.Circle(xy=self.xy_test2, radius=lim_radius, ec=color_line, fill=False)
             #ax.add_patch(cir_test2)
         
+            # plot map
+            plt.imshow(img_list, extent=(img_left, img_right, img_bottom, img_top))
         
             # Write landing permission range
             plt.plot(x,y,"r")  
@@ -343,7 +350,7 @@ class PostProcess_dist():
 
         # END IF
 
-        ax.set_aspect('equal')
+        # ax.set_aspect('equal')
 
         return None
     
@@ -381,11 +388,16 @@ class PostProcess_dist():
             plt.plot(drop_point[i,:,0],drop_point[i,:,1], label = labelname, lw=2, color=cm.Oranges(i/imax)) 
             
         # output_name = "output/Figure_elev_" + str(int(rail_elev)) + ".png"
-        output_name = 'Figure_' + fall_type + '_elev' + str(int(launcher_elev_angle)) + 'deg.eps'
+        
+        output_name = 'results/Figure_' + fall_type + '_elev' + str(int(launcher_elev_angle)) + 'deg.eps'
     
         plt.title(title_name)
         plt.legend()
-        plt.savefig(output_name, bbox_inches='tight')
+        try:    
+            plt.savefig(output_name, bbox_inches='tight')
+        except:
+            subprocess.run(['mkdir', 'results'])
+            plt.savefig(output_name, bbox_inches='tight')
         plt.show()
         
         
@@ -522,7 +534,7 @@ class JudgeInside():
 
 
 if __name__ == '__main__':
-    tmp = PostProcess_dist()
+    tmp = PostProcess_dist('noshiro_sea')
     tmp.set_coordinate_izu()
     tmp.plot_map()
 
