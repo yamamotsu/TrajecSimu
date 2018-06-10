@@ -10,15 +10,15 @@ Created on Sun Dec  3 17:33:18 2017
 # sample driver script for trajectory simulation
 
 import numpy as np
-from UI_landingdist import TrajecSimu_UI
+from Scripts.UI_landingdist import TrajecSimu_UI
 
 # define path and filename of raa csv file
-config_filename = 'Parameters_csv/2018noshiro/felix_ver0507.csv'
+config_filename = 'Parameters_csv/2018noshiro/felix_ver1ji.csv'
 # config_filename = 'Parameters_csv/2018noshiro/felix_ver0525.csv'
 
 
 # create an instance
-mysim = TrajecSimu_UI(config_filename, 'izu')
+mysim = TrajecSimu_UI(config_filename, 'noshiro_sea')
 
 # ------------------------------------
 # run a single trajectory computation 
@@ -33,7 +33,7 @@ mysim.run_single()
 #         n_winddirec: number of wind directions 
 #         max_windspeed: max. wind speed [m/s]
 #         windspeed_step: wind speed step [m/s]
-# mysim.run_loop(2, 2, 1)
+# mysim.run_loop(8, 7, 1)
 
 # ------------------------------------
 # run an optimization problem
