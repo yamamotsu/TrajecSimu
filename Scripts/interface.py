@@ -9,6 +9,8 @@ Created on Thu Jan 18 12:53:42 2018
 import numpy as np
 import pandas as pd
 import subprocess
+import matplotlib.pyplot as plt
+from scipy import optimize
 from Scripts.trajectory_main import Trajec_run
 from Scripts.postprocess import PostProcess_single, PostProcess_dist, JudgeInside
 
@@ -326,10 +328,10 @@ class TrajecSimu_UI():
         
         return None
 
-    """
     def run_rapid_design(self, m_dry, obj_type='altitude', obj_value=10000):
         # =============================================
         # A method for running simulations for rapid design toolbox 
+        # Given mass_dry and objective Mach or altitude, returns required thrust property as well as total mass at lift-off
         #
         # INPUT: m_dry         = target dry mass
         #        obj_type      = design objective type. 'altitude' or 'Mach'
@@ -337,18 +339,17 @@ class TrajecSimu_UI():
         # =============================================
         
         print('==========================')
-        print(' Rapid Design Toolbox')
-        print(' m_dry: ', m_dry)
+        print(' ECHO: Rapid Design Toolbox')
+        print(' target m_dry: ', m_dry)
         print(' target type: ', obj_type)
         print(' target value:', obj_value)
         print('==========================')
         
-        #
-        params_df = self.params_df
-        params_df.loc[params_df.parameter == 'm_dry', 'value'] = m_dry
-        
+        # overwrite m_dry
+        params_update = [ ['m_dry', m_dry], ['thrust_mag_factor', 0.], ['time_mag_factor', 0.], ['m_prop', 0.] ]
+                
         # thrust magnification factor setting
-        thrust_mag_array = np.linspace(2., 4., 9)
+        thrust_mag_array = np.linspace(0.8, 2.0, 9)
         time_mag_array = np.zeros(len(thrust_mag_array))
         
         # initialize resulting array
@@ -356,10 +357,16 @@ class TrajecSimu_UI():
         max_alt_all = np.zeros(len(thrust_mag_array))
         max_mach_all = np.zeros(len(thrust_mag_array))
         
+        # Thrust property of reference thrust curve
+        Impulse_total_ref = self.myrocket.Params.Impulse_total
+        Thrust_avg_ref    = self.myrocket.Params.Impulse_total / self.myrocket.Params.time_array[-1]  # averaged thrust
+        t_MECO_ref        = self.myrocket.Params.time_array[-1] # MECO time
+        
         # loop over thrust_mag_factor
         for i in range(len(thrust_mag_array)):
             # overwrite thrust_mag_factor
-            params_df.loc[params_df.parameter == 'thrust_mag_factor', 'value'] = thrust_mag_array[i]
+            params_update[1][1] = thrust_mag_array[i]
+            # params_df.loc[params_df.parameter == 'thrust_mag_factor', 'value'] = thrust_mag_array[i]
             
             # ------------------------------------
             def obj_all(time_mag_factor):
@@ -372,39 +379,46 @@ class TrajecSimu_UI():
                 # variable setup: 
                 # --------------------------
                 # overwrite time_mag_factor
-                params_df.loc[params_df.parameter == 'time_mag_factor', 'value'] = time_mag_factor
+                params_update[2][1] = time_mag_factor
+    
                 # estimate mass of propellant from mag_factors
-                It_mag_factor = time_mag_factor * thrust_mag_array[i]
-                m_prop_per10000Ns =7.   # mass of propellant[kg] for 10000N.s
+                # total impulse estimate = reference It * time_mag * thrust*mag 
+                It_tmp = time_mag_factor * thrust_mag_array[i] * Impulse_total_ref
+                m_prop_per10000Ns =7.   # HARDCODING: mass of propellant[kg] for 10000N.s is 7kg
                 
-                #reference raw data of the UM Rocket team
+                # NOTE: reference raw data of the UM Rocket team
                 #fuel:     2.4kg 
                 #oxidizer: 13.75 kg
                 #total impulse: 32100 N.s
                 #   -> 5kg propellant / 10000N.s 
                 #   85% of prop mass = ox, 15% = fuel
 
-                m_prop = m_prop_per10000Ns * It_mag_factor # mass of propellant for current design
+                m_prop = m_prop_per10000Ns * (It_tmp/10000.) # mass of propellant for current design
                 # overwrite m_propellant
-                params_df.loc[params_df.parameter == 'm_prop', 'value'] = m_prop
+                params_update[3][1] = m_prop
                 
                 # --------------------------
                 # trajectory computation
                 # --------------------------
-                # compute trajectory
-                self.run()
+                # update all parameters
+                self.myrocket.Params.overwrite(params_update)
+                # run a main computation
+                self.myrocket.run()
                 # post-process and get objective value
-                self.postprocess('maxval')
-                # obtain result
-                max_alt = self.res['flight_detail']['max_altitude']
-                max_mach = self.res['flight_detail']['max_Mach']
+                post = PostProcess_single(self.myrocket)
+                post.postprocess('maxval')
+                # obtain objective value
+                tmp_dict1 = self.myrocket.res['flight_detail']
+                max_alt = tmp_dict1['max_altitude'][0]        # max altitude
+                max_mach = tmp_dict1['max_Mach'][0]            # max Mach number
+            
                 if obj_type == 'altitude':
                     # --- design objective: altitude ---
-                    result = max_alt[0]
+                    result = max_alt
                 
                 elif obj_type == 'Mach':
                     # --- design objective: Mach ---
-                    result = max_mach[0]
+                    result = max_mach
                     
                 # return residual
                 return result-obj_value, max_alt, max_mach, m_prop
@@ -416,16 +430,16 @@ class TrajecSimu_UI():
             
             
             # solve " objective=0 "
-            # time_mag_sol = optimize.fsolve(obj_residual, 1.5, xtol=1.e-06)
-            time_mag_sol = optimize.brentq(obj_residual, 0.1, 5., xtol=1.e-06)
+            time_mag_sol = optimize.newton(obj_residual, 1.0, tol=1.e-03)
+            # time_mag_sol = optimize.brentq(obj_residual, 0.5, 10., xtol=1.e-06)
             time_mag_array[i] = time_mag_sol
             
             # re-do optimal computation for recording
             _, max_alt, max_mach,m_prop = obj_all(time_mag_sol)
             # record
             mass_all[i] = m_dry + m_prop
-            max_alt_all[i] = max_alt[0]
-            max_mach_all[i] = max_mach[0]
+            max_alt_all[i] = max_alt
+            max_mach_all[i] = max_mach
             
             print('---------------------------------------')
             print('mag. factor for [thrust, time] =', thrust_mag_array[i], time_mag_sol)
@@ -446,22 +460,23 @@ class TrajecSimu_UI():
         print(' target type: ', obj_type)
         print(' target value:', obj_value)
         print('==========================')
-        time_dim = time_mag_array*10
-        thrust_dim = thrust_mag_array*1000
+        time_dim = time_mag_array*t_MECO_ref 
+        thrust_dim = thrust_mag_array*Thrust_avg_ref
         impulse_dim = time_dim*thrust_dim
+        
         # ---- plot 1 ------
         fig = plt.figure()
         ax1 = fig.add_subplot(111)
         ax1.plot(time_dim, thrust_dim, label='thrust', color='r')  # burn time vs. averaged thrust
-        plt.legend()
         ax2 = ax1.twinx() 
         ax2.plot(time_dim, impulse_dim, label='It', color='b') # burn time vs. total impulse
         
         ax1.set_xlabel('burn time[s]')
         ax1.set_ylabel('averaged thrust[N]')
         ax1.grid(True)
+        ax1.legend(loc='upper left')
         ax2.set_ylabel('total impulse')
-        plt.legend()
+        ax2.legend(loc='upper right')
         target_str = 'm_dry='+str(m_dry)+'[kg], target '+obj_type+'='+str(obj_value)
         plt.title('Required engine property: ' + target_str)
         plt.savefig('engine.eps')
@@ -480,26 +495,24 @@ class TrajecSimu_UI():
         fig = plt.figure()
         ax1 = fig.add_subplot(111)
         ax1.plot(time_dim, max_alt_all, label='altitude', color='r')  # burn time vs. averaged thrust
-        plt.legend()
         ax2 = ax1.twinx() 
         ax2.plot(time_dim, max_mach_all, label='Mach', color='b') # burn time vs. total impulse
-        plt.legend()
         
         ax1.set_xlabel('burn time[s]')
         ax1.set_ylabel('max altitude [m]')
         ax1.grid(True)
+        ax1.legend(loc='upper left')
         ax2.set_ylabel('max mach')
-        plt.legend()
+        ax2.legend(loc='upper right')
         plt.title('Flight detail: '+ target_str)
         plt.savefig('maxval.eps')
         # plt.show()
         
         # create a new directory 
-        dirname = 'RDT_' + target_str
+        dirname = 'RapidDesignToolbox_' + target_str
         subprocess.run(['mkdir', dirname])
         # move SU2 output files to the directory
         subprocess.run(['mv', 'maxval.eps', 'wetmass.eps', 'engine.eps', dirname])
         
         return None
-    """
         
