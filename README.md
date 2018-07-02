@@ -1,7 +1,7 @@
 # TrajecSimu
 
 6-dof trajectory simulation for high-power rockets.  
-current version: 2.0 (7/2/2018)
+current version: 2.1 (7/2/2018)
 
 ## Description
 Solves a 6-dof equation of motion for a trajectory of a transonic high-power rocket.  
