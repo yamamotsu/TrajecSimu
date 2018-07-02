@@ -13,7 +13,7 @@ import numpy as np
 from Scripts.interface import TrajecSimu_UI
 
 # define path and filename of raa csv file
-config_filename = 'Parameters_csv/2018noshiro/felix_ver1ji.csv'
+config_filename = 'Config_sample/sample_config.csv'
 # config_filename = 'Parameters_csv/2018noshiro/felix_ver0525.csv'
 
 
@@ -23,7 +23,7 @@ mysim = TrajecSimu_UI(config_filename, 'noshiro_sea')
 # ------------------------------------
 # run a single trajectory computation 
 # ------------------------------------
-# mysim.run_single()
+#mysim.run_single()
 
 # ------------------------------------
 # run a loop for landing point distribution

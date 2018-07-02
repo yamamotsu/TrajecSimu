@@ -109,7 +109,7 @@ class Parameters():
                             'aero_fin_mode'     : 'integ',  # 'indiv' for individual fin computation, 'integ' for compute fin-body at once
                             'Cd0'               : 0.6,      # drag coefficient at Mach 0.1, AoA = 0deg
                             'Cmp'               : -0.,      # stability derivative of rolling moment coefficient (aerodynamic damping)
-                            'Cmq'               : -4.,     # stability derivative of pitching/yawing moment coefficient (aerodynamic damping)
+                            'Cmq'               : -4.,      # stability derivative of pitching/yawing moment coefficient (aerodynamic damping)
                             'Cl_alpha'          : 12.,      # lift coefficient slope for small AoA [1/rad]
                             'Mach_AOA_dep'      : True,     # True if aerodynamic parameter depends on Mach/AOA, False if ignore 
                             

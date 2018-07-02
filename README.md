@@ -1,11 +1,13 @@
 # TrajecSimu
 
-6-dof trajectory simulation for high-power rockets. 
+6-dof trajectory simulation for high-power rockets.  
 current version: 2.0 (7/2/2018)
 
 ## Description
-Solves a 6-dof equation of motion for a high-power rocket trajectory and shows flight logs.  
+Solves a 6-dof equation of motion for a trajectory of a transonic high-power rocket.  
 Limited to ones without attitude/trajectory control.
+
+Might have some problems on Windows/Linux.
 
 ## Usage
 
@@ -20,7 +22,9 @@ $ git clone https://github.com/shugok/TrajecSimu
 ```
 
 ### Demo
-`driver_sample.py` is a sample driver code to run simulation. See comment in the file.
+`driver_sample.py` is a sample driver code to run simulation. See comments in the file.  
+
+A sample rocket configuration file `sample_config.csv` and a thrust curve `sample_thrust.csv` are available.
 
 ## Licence
 

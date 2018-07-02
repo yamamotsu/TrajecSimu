@@ -1,0 +1,113 @@
+$
+$
+$  ROCKET PARAMETER DEFINITION
+$
+$  sample file by shugok
+ 
+$ ----------------------------
+$ rocket airframe parameters
+$ ----------------------------
+$ rocket height [m]
+rocket_height, 4.768
+$ rocket diameter [m]
+rocket_diameter, 0.167
+$ dry mass [kg]
+m_dry,  40
+$ propellant mass [kg]
+m_prop, 14.
+$ center of gravity (CG) location of dry mass from nose tip [m]
+CG_dry, 3.072
+$ center of gravity (CG) location of propellant from nose tip [m]
+CG_prop, 2.45
+$ moment of inertial of dry mass wrt. CG_dry [kg-m^2]
+MOI_dry_x, 0.5007
+MOI_dry_y, 70.888
+MOI_dry_z, 70.888
+$ moment of inertial of propellant wrt. CG_prop [kg-m^2]
+MOI_prop_x, 0.1
+MOI_prop_y, 3.
+MOI_prop_z, 3.
+$ front and rear launch lug location from nose tip [m]
+lug_1st, 1.568
+lug_2nd, 3.568
+
+$ ----------------------------
+$ rocket aerodynamic parameters (at M = 0.3, AoA ~ 0deg)
+$ ----------------------------
+$ center of pressure (CP) location from nose tip [m] 
+CP_body, 3.572
+$ drag coefficient
+Cd0, 0.5
+$ Lift slope [1/rad]
+Cl_alpha, 12.
+$ pitch damping coefficient
+Cmq, -4.
+
+$ ----------------------------
+$ numerical parameters
+$ ----------------------------
+$ time step [s]
+dt, 0.05
+$ max time for computation [s]
+t_max, 2000.
+
+$ ----------------------------
+$ launch parameters
+$ ----------------------------
+$ launcher elevetion angle [deg]
+elev_angle, 80.
+$ azimuth [deg], North=0, East=90
+azimuth, 295.
+$ launcher rail lenght [m]
+rail_length, 10.
+
+$ ----------------------------
+$ launch parameters
+$ ----------------------------
+$ wind direction blowing from [deg]
+wind_direction, 295.
+$ wind speed at wind_alt_std[m]
+wind_speed, 3.
+$ wind power profile coefficient
+wind_power_coeff, 6.
+$ reference altitude where wind speed is defined [m]
+wind_alt_std, 5.
+$ wind model
+wind_model, power-forecast-hydrid
+$ forecast scsv file 
+forecast_csvname,wind_forecast_csv/interp_wind_20170821.csv
+
+$ ----------------------------
+$ engine parameters
+$ ----------------------------
+$ thrust_input_type =
+$	'rectangle'     for constant thrust. Requires "thrust"[N], "t_MECO"[s]
+$ 	'curve_const_t' for thrust log with constant time step. Requires "thrust_dt"[s] and "thrust_filename"
+$   'time_curve'    for time and Thrust log. Requires "thrust_filename"
+thrust_input_type, time_curve
+$ thrust curve file 
+thrust_filename, Thrustcurve_sample/sample_thrust.csv
+$ thrust magnification factor
+thrust_mag_factor, 1.0
+$ burn time magnification factor
+time_mag_factor, 1.0
+
+$ ----------------------------
+$ parachute parameters
+$ ----------------------------
+$ 1st parachute deployment time delay from apogee [s]
+t_para_delay, 1.
+$ drag coeff. of 1st parachute
+Cd_para, 1.
+$ net area of 1st parachute [m^2]
+S_para, 0.712
+$ whether 2nd parachute is deployed or not
+second_para, True
+$ 2nd parachute deployment time from take-off
+t_deploy_2, 1800.
+$ drag coeff. of 2nd parachute
+Cd_para_2, 1.
+$ net area of 2nd parachute [m^2]
+S_para_2, 10.082
+$ altitude where 2nd parachute is deployed
+alt_para_2, 300.
