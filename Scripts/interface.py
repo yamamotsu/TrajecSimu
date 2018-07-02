@@ -7,20 +7,14 @@ Created on Thu Jan 18 12:53:42 2018
 """
 
 import numpy as np
-import sys
-import numpy as np
-import matplotlib.pyplot as plt
-from PIL import Image
-from mpl_toolkits.mplot3d import Axes3D
-from scipy import fftpack, interpolate, integrate, optimize
 import pandas as pd
 import subprocess
-from Scripts.Rocket_simu import Rocket
-from Scripts.postprocess_plot import PostProcess_dist, JudgeInside
+from Scripts.trajectory_main import Trajec_run
+from Scripts.postprocess import PostProcess_single, PostProcess_dist, JudgeInside
 
-# User Interface for 
 
 class TrajecSimu_UI():
+    # class for trajectory simulation interface
 
     def __init__(self, csv_filename, loc='noshiro_sea'):
         # =============================================
@@ -30,24 +24,22 @@ class TrajecSimu_UI():
         #        lco          = 'izu' or 'noshiro_sea'
         # =============================================
 
-        # create an instance 
+        # create an instance for pre/post processing.
         # provide csv file name that contains parameters
-        self.myrocket = Rocket(csv_filename)
+        self.myrocket = Trajec_run(csv_filename)
         
         self.launch_location = loc
-        
-
 
     def run_single(self):
         # =============================================
         # A method for a single trajectory simulation and post-processing
         # =============================================
-        
+
         # run a main computation
         self.myrocket.run()
-            
         # post-process
-        self.myrocket.postprocess('all')
+        post = PostProcess_single(self.myrocket)
+        post.postprocess('all')
             
         return None
     
@@ -57,14 +49,14 @@ class TrajecSimu_UI():
         #
         #        wind_direction_array = np.array that contains wind directions to be computed
         #        wind_speed_array     = np.array that contains wind speedsto be computed
+        #        windspeed_step       = np.float of wind increase step
         # =============================================
         
-        # keep initial parachute deployment definition
-        t_para_delay_original = self.myrocket.params_dict['t_para_delay']
-        t_deploy_original = self.myrocket.params_dict['t_deploy']
-        
+        # keep initial parachute deployment parameters
+        t_para_delay_original = self.myrocket.Params.params_dict['t_para_delay']
+        t_deploy_original     = self.myrocket.Params.params_dict['t_deploy']
         wind_direction_array = np.linspace(0., 360., n_winddirec+1)
-        wind_speed_array = np.arange(1., max_windspeed + windspeed_step, windspeed_step)
+        wind_speed_array     = np.arange(1., max_windspeed + windspeed_step, windspeed_step)
         
         # --------------------
         # initialize arrays 
@@ -78,7 +70,7 @@ class TrajecSimu_UI():
         self.max_Mach     = np.zeros((n1, n2))       # max Mach number
         self.max_Q        = np.zeros((n1, n2))       # max dynamic pressure
         self.v_launch_clear = np.zeros((n1, n2))     # lanuch clear air speed
-        self.v_para_deploy  = np.zeros((n1, n2))       # parachute deploy air speed
+        self.v_para_deploy  = np.zeros((n1, n2))     # parachute deploy air speed
           
         # initialize array for parameter update
         params_update = [ ['wind_speed', 0.], ['wind_direction', 0.], ['t_para_delay', 0.], ['t_deploy', 0.] ]
@@ -101,48 +93,45 @@ class TrajecSimu_UI():
                 # overwrite wind speed
                 params_update[1][1] = wind_angle
                 
-                
                 # -----------------------------------
-                #  landing point for ballistic fall  
+                #  compute landing point for ballistic fall  
                 # -----------------------------------
                 # overwrite parachute opening delay time to inf.
                 params_update[2][1] = 1.e7
                 params_update[3][1] = 1.e7
                 
                 # overwrite parameters
-                self.myrocket.overwrite_dataframe(params_update)
+                self.myrocket.Params.overwrite(params_update)
                 # run a single trajectory simulation
                 self.myrocket.run()    
                 # post-process 
-                self.myrocket.postprocess('maxval')
+                post_bal = PostProcess_single(self.myrocket)
+                post_bal.postprocess('maxval')
                 # record landing location
-                self.record_loop_result('bal', i_speed,i_angle)
+                self.record_loop_result('bal', i_speed,i_angle, post_bal)
                 
-                
-                #
                 # ---------------------------------
-                # landing point for parachute fall
+                # compute landing point for parachute fall
                 # ---------------------------------
                 # overwrite parachute opening delay time to 1s.
                 params_update[2][1] = t_para_delay_original
                 params_update[3][1] = t_deploy_original
                 
                 # overwrite parameters
-                self.myrocket.overwrite_dataframe(params_update)
+                self.myrocket.Params.overwrite(params_update)
                 # run main computation
                 self.myrocket.run()
                 # post-process and get landing location
-                self.myrocket.postprocess('maxval')
+                post_para = PostProcess_single(self.myrocket)
+                post_para.postprocess('maxval')
                 # record results
-                self.record_loop_result('para', i_speed,i_angle)
+                self.record_loop_result('para', i_speed,i_angle, post_para)
                 # record other flight detail 
-                self.record_loop_result('vals', i_speed,i_angle)
-                #
+                self.record_loop_result('vals', i_speed,i_angle, post_para)
                 
                 # loop count
                 i_angle += 1
             #END FOR
-            
             # loop count
             i_speed += 1
         # END FOR
@@ -151,51 +140,58 @@ class TrajecSimu_UI():
         self.loc_bal[:,-1,:] = self.loc_bal[:,0,:]
         self.loc_para[:,-1,:] = self.loc_para[:,0,:]
         
-        # """
-        
-        """
+        """ # dummy landing points for degub
         tmpx = np.array([ [0., 100., 200., 100. ,0],  [0., 200., 400., 200. ,0], [0., 50., 100., 50. ,0] ] )
         tmpy = np.array([ [0., 100., 0., -100. ,0],   [0., 200., 0., -200. ,0],  [0., 50., 0., -50. ,0] ])
         self.loc_bal = np.dstack( (tmpx, tmpy) )
         self.loc_para = np.dstack( (tmpx, tmpy) )
         """
-        
+
+        # create directory for results
+        try:
+            subprocess.run(['mkdir', 'results'])
+        except:
+            pass
         # -------------------------------
-        #  plot
+        #  plot landing points scatter map
         # -------------------------------
-        mypost = PostProcess_dist(self.launch_location)
-        elev_angle = self.myrocket.trajectory.elev_angle  # launcher elev angle        
-        mypost.plot_sct(self.loc_bal,  wind_speed_array, elev_angle, 'Ballistic')
-        mypost.plot_sct(self.loc_para, wind_speed_array, elev_angle, 'Parachute')
+        # create instance for postprocessing
+        post_dist = PostProcess_dist(self.launch_location)
+        elev_angle = self.myrocket.Params.elev_angle  # launcher elev angle        
+        post_dist.plot_sct(self.loc_bal,  wind_speed_array, elev_angle, 'Ballistic')   # plot ballistic scatter
+        post_dist.plot_sct(self.loc_para, wind_speed_array, elev_angle, 'Parachute')   # plot parachute scatter
         
         # -------------------------------
         #  define permitted ranges
         # -------------------------------
-        tmp_centers = np.array([mypost.xy_rail, mypost.xy_switch, mypost.xy_tent])
+        tmp_centers = np.array([post_dist.xy_rail, post_dist.xy_switch, post_dist.xy_tent])
         # initialize dict
         permitted_area_for_para = {'range':None, 'outside_centers':None, 'outside_radius':None, 'inside_center':None, 'inside_radius':None, "under_line":None, "over_line":None}
         permitted_area_for_bal = {'range':None, 'outside_centers':None, 'outside_radius':None, 'inside_center':None, 'inside_radius':None, "under_line":None, "over_line":None}
         if self.launch_location == 'noshiro_sea':
-            permitted_area_for_para['inside_center']= mypost.xy_center
-            permitted_area_for_para['inside_radius']= mypost.hachiya_radius
-            permitted_area_for_para["over_line"]= mypost.hachiya_line
-            permitted_area_for_bal['inside_center']= mypost.xy_center
-            permitted_area_for_bal['inside_radius']= mypost.hachiya_radius
-            permitted_area_for_bal["over_line"]= mypost.hachiya_line
+            # permitted range for Noshiro sea (2018)
+            permitted_area_for_para['inside_center'] = post_dist.xy_center
+            permitted_area_for_para['inside_radius'] = post_dist.hachiya_radius
+            permitted_area_for_para["over_line"]     = post_dist.hachiya_line
+            permitted_area_for_bal['inside_center']  = post_dist.xy_center
+            permitted_area_for_bal['inside_radius']  = post_dist.hachiya_radius
+            permitted_area_for_bal["over_line"]      = post_dist.hachiya_line
             permitted_area_for_bal["outside_centers"]= tmp_centers
-            permitted_area_for_bal["outside_radius"]= mypost.lim_radius
-            
+            permitted_area_for_bal["outside_radius"] = post_dist.lim_radius
         elif self.launch_location == 'izu':
-            permitted_area_for_para['range']= mypost.xy_range
-            permitted_area_for_bal['range']= mypost.xy_range
+            # premitted range for Izu dessert (2018)
+            permitted_area_for_para['range']         = post_dist.xy_range
+            permitted_area_for_bal['range']          = post_dist.xy_range
             permitted_area_for_bal['outside_centers']= tmp_centers
-            permitted_area_for_bal['outside_radius']= mypost.lim_radius
-            
+            permitted_area_for_bal['outside_radius'] = post_dist.lim_radius
+        else:
+            raise NotImplementedError('The launch site is not implemented. "Noshiro_sea" or "izu" are currently available')
         # END IF
         
         # -------------------------------
         # judge ballistic landing points 
-        # -------------------------------       
+        # -------------------------------     
+        # create instance for auto-judge (ballistic) 
         autojudge_bal = JudgeInside(permitted_area_for_bal)
         # initialize array for result
         self.res_bal = np.ones( (self.loc_bal.shape[0], self.loc_bal.shape[1]-1) ) * False  
@@ -229,7 +225,7 @@ class TrajecSimu_UI():
         # END IF                   
         
         # ------------------------
-        # judge both at once
+        # judge Go or NO-Go
         # ------------------------
         self.list_res_both = [ ['NoGo' for i in range(self.loc_bal.shape[1]-1)] for j in range(self.loc_bal.shape[0])] 
         # loop over wind speed
@@ -252,13 +248,14 @@ class TrajecSimu_UI():
         return None
     
     
-    def record_loop_result(self, record_type, i_speed, i_angle):
+    def record_loop_result(self, record_type, i_speed, i_angle, post_instance):
         # =============================================
         # A method for getting and recording flight result 
         #
         # input: record type = 'bal' or 'para' or 'vals'
         #        i_speed = index for wind speed
         #        i_angle = index for wind direction
+        #        post_instance = post-processed instance
         # =============================================
         
         if record_type == 'bal':
@@ -302,7 +299,7 @@ class TrajecSimu_UI():
         
         
         # define output file name
-        output_name = 'results/output_' + str(int(self.myrocket.trajectory.elev_angle)) + 'deg.xlsx'
+        output_name = 'results/output_' + str(int(self.myrocket.Params.elev_angle)) + 'deg.xlsx'
         excel_file = pd.ExcelWriter(output_name)
  
         # write dataframe with sheet name
@@ -328,7 +325,8 @@ class TrajecSimu_UI():
             excel_file.save()
         
         return None
-    
+
+    """
     def run_rapid_design(self, m_dry, obj_type='altitude', obj_value=10000):
         # =============================================
         # A method for running simulations for rapid design toolbox 
@@ -378,14 +376,14 @@ class TrajecSimu_UI():
                 # estimate mass of propellant from mag_factors
                 It_mag_factor = time_mag_factor * thrust_mag_array[i]
                 m_prop_per10000Ns =7.   # mass of propellant[kg] for 10000N.s
-                """
-                reference raw data of the UM Rocket team
-                fuel:     2.4kg 
-                oxidizer: 13.75 kg
-                total impulse: 32100 N.s
-                   -> 5kg propellant / 10000N.s 
-                   85% of prop mass = ox, 15% = fuel
-                """
+                
+                #reference raw data of the UM Rocket team
+                #fuel:     2.4kg 
+                #oxidizer: 13.75 kg
+                #total impulse: 32100 N.s
+                #   -> 5kg propellant / 10000N.s 
+                #   85% of prop mass = ox, 15% = fuel
+
                 m_prop = m_prop_per10000Ns * It_mag_factor # mass of propellant for current design
                 # overwrite m_propellant
                 params_df.loc[params_df.parameter == 'm_prop', 'value'] = m_prop
@@ -502,73 +500,6 @@ class TrajecSimu_UI():
         # move SU2 output files to the directory
         subprocess.run(['mv', 'maxval.eps', 'wetmass.eps', 'engine.eps', dirname])
         
-        
         return None
-        
-    
-    def plot_dist(self, wind_speed_array):
-        # plot landing spot distribution
-
-        n_windspeed, n_winddir, _ = self.loc_bal.shape
-        # ----------------------------
-        # Izu umi zone: D = 5km
-        # ----------------------------
-        R = 2500.
-        center = np.array([1768., -1768.])
-        theta = np.linspace(0,2*np.pi,100)
-        x_circle = R * np.cos(theta) + center[0]
-        y_circle = R * np.sin(theta) + center[1]
-        
-        # ----------------------------
-        #    ballistic
-        # ----------------------------
-        plt.figure(6)
-        # loop over wind speed
-        for i in range(n_windspeed):
-            # plot ballistic landing distribution
-            legend =  str(wind_speed_array[i]) + 'm/s'
-            
-            plt.plot(self.loc_bal[i,:,0] ,self.loc_bal[i,:,1] ,label=legend )
-            plt.plot(self.loc_bal[i,0,0] ,self.loc_bal[i,0,1] , color='b', marker='x', markersize=4)  # wind: 0 deg
-            plt.plot(self.loc_bal[i,1,0] ,self.loc_bal[i,1,1] , color='b', marker='x', markersize=4)  # wind: 0+ deg
-        #END IF
-        
-        
-        plt.grid()
-        plt.legend()
-        plt.title('ballistic landing distribution')
-        plt.xlabel('x [m]')
-        plt.ylabel('y [m]')
-        plt.axis('equal')
-        #plt.plot(0,0,color='r',marker='*',markersize=12)
-        #plt.plot(x_circle, y_circle,color='r',lw=5)
-        #plt.show()
-        
-        
-        # ----------------------------
-        #    parachute
-        # ----------------------------
-        plt.figure(7)
-        # loop over wind speed
-        for i in range(n_windspeed):
-            # plot parachute landing distribution
-            legend =  str(wind_speed_array[i]) + 'm/s'
-            
-            plt.plot(self.loc_para[i,:,0] ,self.loc_para[i,:,1] ,label=legend )
-            plt.plot(self.loc_para[i,0,0],self.loc_para[i,0,1] , color='b', marker='x', markersize=4) # wind: 0 deg
-            plt.plot(self.loc_para[i,1,0],self.loc_para[i,1,1] , color='b', marker='x', markersize=4) # wind: 0+ deg
-        #END IF
-        
-        plt.grid()
-        plt.legend()
-        plt.title('parachute landing distribution')
-        plt.xlabel('x [m]')
-        plt.ylabel('y [m]')
-        plt.axis('equal')
-        # plt.plot(0,0,color='r',marker='*',markersize=12)
-        # plt.plot(x_circle, y_circle,color='r',lw=5)
-        # plt.show
-        
-        return None
-    
+    """
         

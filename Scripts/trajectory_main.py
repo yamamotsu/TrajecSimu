@@ -8,17 +8,101 @@ Created on Sat Jul  8 23:06:17 2017
 
 import numpy as np
 from scipy.integrate import ode, odeint
-from scipy import fftpack, interpolate, integrate, optimize
-import pandas as pd
+from scipy import integrate
 import quaternion 
-from Scripts.Rocket_simu import Rocket
-import matplotlib.pyplot as plt
-import math
+#from Scripts.Rocket_simu import Rocket
+#import matplotlib.pyplot as plt
+import copy
+#import subprocess
+from Scripts.parameters import Parameters
 
-class trajec_main(Rocket):
+
+# class
+class Trajec_run():
     """
     ====================================================
-    This class is a sub-class for main ODE trajecotry computation
+    This is a class for simulation parameter setting, execution of main computation, and post-processing.
+    An instance of this class should be created at first.
+    Main computation will be executed by a sub-class "trajec_main"
+    ====================================================
+    """
+    
+    """
+    ----------------------------------------------------
+        Methods for initilization and parameter setting            
+    ----------------------------------------------------
+    """
+    
+    def __init__(self, csv_filename):
+        # =============================================
+        # This method is called when an instance is created
+        # =============================================
+        
+        """
+        # read csv file that contains initial parameters
+        try:
+            self.params_df = pd.read_csv(csv_filename, comment='$', names=('parameter', 'value') ) # '$' denotes commet out  
+        except:
+            self.params_df = pd.read_csv(csv_filename, comment='$', names=('parameter', 'value', ' ') ) # '$' denotes commet out  
+        
+        # initialize parameters by setting default values
+        self.get_default()   
+        self.overwrite_parameters(self.params_df)
+        """
+
+        # create an instance for rocket parameters
+        self.Params = Parameters(csv_filename)
+        
+        # initialize a dict for results
+        self.res = {}
+
+        return None      
+        
+    """
+    ----------------------------------------------------
+        Methods for main computation            
+    ----------------------------------------------------
+    """
+    
+    def run(self):
+        # =============================================
+        # A base method for a single trajectory simulation
+        #
+        # INPUT: params_df = dataframe containing user-defined parameters
+        # =============================================
+                      
+        # import sub-class
+        # from Scripts.trajectory import trajec_main
+        
+        # create an instance for a trajectry simulation
+        # self.trajectory = trajec_main(self.params_df)  # provide parameters for sub-class 
+        self.trajectory = Trajec_main(self.Params) 
+        
+        #"""
+        print('============================')
+        print('  Completed Parameters Setup')
+        print('============================')
+        print(' ')
+        #"""
+
+        # run ODE integration
+        self.trajectory.ODE_main()
+                    
+        # quit
+        #"""
+        print('============================')
+        print('  Quit ODE_main')
+        print('============================')
+        print(' ')
+        #"""
+
+        return None
+
+
+class Trajec_main():
+    """
+    ====================================================
+    Class for rocket trajectory equation of motion (EOM) and its integration
     ====================================================
     """
     
@@ -27,15 +111,23 @@ class trajec_main(Rocket):
         Method for initial setup    
     ----------------------------------------------------
     """
-    def __init__(self, params_df):
+    def __init__(self, Params):
         # =============================================
         # this method is called when instance is created. Parameter setup is also done by this method.
         #
-        # INPUT: params_df = parameters contains all parameters needed
+        # INPUT: Params = instance that contains parameter values
         # =============================================
         # setup parameters in the instance by calling superclasses method
-        self.get_default()   
-        self.overwrite_parameters(params_df)   
+        #self.get_default()   
+        #self.overwrite_parameters(params_df)   
+
+        # copy instance since it will be modified during integration
+        self.Params = copy.deepcopy(Params)
+
+        # setup aerocoeff interpolation curves
+        self.Params.setup_aero_coeffs()
+        # setup wind 
+        self.Params.setup_wind()
         
         # initialize a dict for result
         self.res_trajec_main = {'v_para_deploy': -1}  #, 'v_launch_clear': -1}
@@ -72,15 +164,13 @@ class trajec_main(Rocket):
         self.backup = [np.r_[t0,0,u0]]
 
         # landing time initialization: 
-        self.landing_time = self.t_max
+        self.landing_time = self.Params.t_max
             
         # set flag = 1 (on launch rail)
         self.flag = 1
-        
-        # setup aerocoeff interpolation curves
-        self.setup_aero_coeffs()
-        # setup wind 
-        self.setup_wind()
+
+        # reset apogee count
+        self.apogee_count = 0                                        
     
         """
         print('----------------------------')
@@ -94,23 +184,18 @@ class trajec_main(Rocket):
         self.time_all = np.array([0]) 
         """
         
-        if self.integ == 'lsoda_odeint':
+        if self.Params.integ == 'lsoda_odeint':
             # ---------------------------------------------
             #      use scipy.odeint
             # ---------------------------------------------
-            # create time array
+            # create time array. Note that dt for initial 3 sec is 10 times smaller than nominal value.
+            self.t = np.r_[ np.arange(t0,3.,self.Params.dt/10), np.arange(3., self.Params.t_max,self.Params.dt) ]
             
-            self.t = np.arange(t0,self.t_max,self.dt)
-            #try:
-                # ---  run trajectory computation   ---
+            # run ODE integration
             self.solution = odeint(self.f_main, u0, self.t)
-            #except:
-            #    print('ode integration failed!')
-            #    pass
             
         else:
-            
-            print('currently not supported. set "inter,lsoda_odeint" in csv file.')
+            raise NotImplementedError('Integration scheme not implemented. Please use lsoda_odeint.')
             
             """
             # ---------------------------------------------
@@ -139,13 +224,6 @@ class trajec_main(Rocket):
         print(' ')
         print(' ')
         """ 
-        """
-        plt.figure
-        plt.plot(self.time_all, self.record_tmp)
-        # plt.plot(self.t_MECO, self.m_dry, '*')
-        plt.grid()
-        plt.show()
-        """
         
         return None   
         
@@ -177,9 +255,9 @@ class trajec_main(Rocket):
         
         # compute initial quaternion 
         # convert body coord. to local fixed coord.
-        angle1 = (90.-self.azimuth)/2. * (np.pi/180.)
+        angle1 = (90.-self.Params.azimuth)/2. * (np.pi/180.)
         qz = np.quaternion(np.cos(angle1),0.,0.,np.sin(angle1))  # around z
-        angle2 = -self.elev_angle/2. * (np.pi/180.)
+        angle2 = -self.Params.elev_angle/2. * (np.pi/180.)
         qy = np.quaternion(np.cos(angle2),0.,np.sin(angle2),0.)  # around y
         # convert local -> rotate around z -> rotate around y -> body
         q0 = qz * qy
@@ -214,7 +292,7 @@ class trajec_main(Rocket):
             return u*0.
             
         # swap input when we use scipy.integrate.ode
-        if self.integ != 'lsoda_odeint':
+        if self.Params.integ != 'lsoda_odeint':
             tmp = u
             u = t
             t = tmp
@@ -224,7 +302,7 @@ class trajec_main(Rocket):
         self.N_iter += 1
         
         # backup
-        if np.mod(self.N_iter, self.N_record) == 0:
+        if np.mod(self.N_iter, self.Params.N_record) == 0:
             self.add_backup(t,u)
         #END IF
         
@@ -248,25 +326,7 @@ class trajec_main(Rocket):
         # ----------------------------
         #   flight mode classification
         # ----------------------------
-        
-        """
-        if self.flag==1 and self.flag_1stlug==0 and x[2] > self.rail_height - 2.:
-            # detect 1st lug clear
-            # then, start rotating
-            # get air speed and AoA
-            air_speed, _, AoA, _ = self.air_state(x,v,Tbl)
-            print('----------------------------')
-            print('  1st lugt clear at t = ',np.round(t, 5),'[s], start rotating')
-            print(' height, ', x[2])
-            print('  ground speed: ',np.round(np.linalg.norm(v), 2),'[m/s]')
-            print('  true air speed: ', np.round(air_speed, 2), '[m/s], AoA: ', np.round(AoA*180./np.pi, 3), '[deg]')
-            print('----------------------------')
-            print(' ')
-            self.flag_1stlug = 1
-        """
-        
-        
-        if self.flag==1 and x[2] > self.height_1stlug_off:
+        if self.flag==1 and x[2] > self.Params.height_1stlug_off:
             # detect 1st launch lug off the rail 
             #  -> rocket starts rotation around 2nd-lug, but no translation
 
@@ -287,8 +347,7 @@ class trajec_main(Rocket):
             # switch into "tip-offed but not launch cleared" phase
             self.flag = 1.1   
             
-            
-        elif self.flag <= 1.1 and x[2] > self.height_2ndlug_off:
+        elif self.flag <= 1.1 and x[2] > self.Params.height_2ndlug_off:
             # detect 2nd launch lug off the rail.
             #  -> rocket starts translation and rotation around CG
             self.flag = 2.
@@ -298,7 +357,7 @@ class trajec_main(Rocket):
                 # detect nozzle off the rail height
             """    
             
-        elif self.flag <= 2 and t >= self.t_MECO:
+        elif self.flag <= 2 and t >= self.Params.t_MECO:
             # detect MECO
 
             print('----------------------------')
@@ -313,7 +372,7 @@ class trajec_main(Rocket):
             # switch into coasting flight
             self.flag = 3   
             
-        elif self.flag==3 and t >= self.t_deploy:
+        elif self.flag==3 and t >= self.Params.t_deploy:
             # detect 1st parachute deployment
 
             # get air speed and AoA
@@ -336,17 +395,17 @@ class trajec_main(Rocket):
             self.res_trajec_main.update( {'v_para_deploy' : air_speed } )
             
             # switch into parachute fall
-            if self.flag_2ndpara:
+            if self.Params.flag_2ndpara:
                 # when two stage separation is True
                 self.flag = 3.5  #flag: drogue chute deployed
             else:
                 self.flag = 4   # flag: main chute deployed
-            
+        
             # stop rotation
             omega = np.zeros(3)  
             
         # elif self.flag==3.5 and (t >= self.t_deploy_2 or 高度が規定値以下) :
-        elif self.flag==3.5 and (t >= self.t_deploy_2 or x[2]<=self.alt_para_2):
+        elif self.flag==3.5 and (t >= self.Params.t_deploy_2 or x[2]<=self.Params.alt_para_2):
             # detect 2nd parachute deployment
 
             # get air speed and AoA
@@ -364,8 +423,8 @@ class trajec_main(Rocket):
             print(' ')
             
             # overwrite parachute properties with 2nd para
-            self.Cd_para = self.Cd_para_2
-            self.S_para += self.S_para_2
+            self.Params.Cd_para = self.Params.Cd_para_2
+            self.Params.S_para += self.Params.S_para_2
             
             # record history
             self.add_backup(t,u)
@@ -373,7 +432,6 @@ class trajec_main(Rocket):
             # switch into main parachute fall
             self.flag = 4
         
-            
         elif self.flag > 1 and self.flag < 5 and x[2] < 0. and t>2.:
             # detect landing
             print('----------------------------')
@@ -392,10 +450,9 @@ class trajec_main(Rocket):
             # flag -> landed
             self.flag = 5 
             # quit integration
-            if self.integ == 'lsoda_odeint':
+            if self.Params.integ == 'lsoda_odeint':
                 return u*0.                
         #END IF 
-        
         
         # ----------------------------
         #    1. Translation
@@ -425,7 +482,7 @@ class trajec_main(Rocket):
         if self.flag <= 1.1:
             # ug on the rail -> du/dx only. Consider rail-rocket friction force 
             # total acceleration 
-            dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.grav) + (aeroF + self.thrust(t) + self.friction() ) / mass
+            dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.Params.grav) + (aeroF + self.thrust(t) + self.friction() ) / mass
             # cancell out y,z
             dv_dt = np.array([dv_dt[0],0.,0.])
             
@@ -438,18 +495,17 @@ class trajec_main(Rocket):
         elif self.flag == 2:
             # thrust ON
             # total acceleration 
-            dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.grav) + self.Coriolis(v, Tbl) + (aeroF + self.thrust(t)) / mass
+            dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.Params.grav) + self.Coriolis(v, Tbl) + (aeroF + self.thrust(t)) / mass
             
         elif self.flag == 3 or self.flag == 5:
             # coasting phase
             # total acceleration 
-            dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.grav) + self.Coriolis(v, Tbl) + aeroF / mass
+            dv_dt = -np.cross(omega,v) + np.dot(Tbl, self.Params.grav) + self.Coriolis(v, Tbl) + aeroF / mass
 
         elif self.flag == 3.5 or self.flag == 4:
             # parachute deployed
-            dv_dt = np.dot(Tbl, self.grav) + self.Coriolis(v, Tbl) + self.parachute_F(x,v,Tbl) / mass
+            dv_dt = np.dot(Tbl, self.Params.grav) + self.Coriolis(v, Tbl) + self.parachute_F(x,v,Tbl) / mass
         #END IF
-        
         
         # ----------------------------
         #    3. Atitude 
@@ -491,14 +547,14 @@ class trajec_main(Rocket):
             if self.flag == 1.1:
                 # 2nd lug on the rail. rotate around this point. Add addtitonal moment
                 # aerodynamic moment correction: move center of rotation from CG > 2nd lug (currently ignore damping correction)
-                aeroM_around_2ndlug = aeroM + np.cross( np.array([self.lug_2nd - CG,0.,0.]) , aeroF )
+                aeroM_around_2ndlug = aeroM + np.cross( np.array([self.Params.lug_2nd - CG,0.,0.]) , aeroF )
                 # gravitaional moment around CG
-                grav_body = mass * np.dot(Tbl, self.grav)  # gravity in body coord.
-                gravM_around_2ndlug = np.cross( np.array([self.lug_2nd - CG,0.,0.]) , grav_body)
+                grav_body = mass * np.dot(Tbl, self.Params.grav)  # gravity in body coord.
+                gravM_around_2ndlug = np.cross( np.array([self.Params.lug_2nd - CG,0.,0.]) , grav_body)
                 # overwrite "aeroM"
                 aeroM = aeroM_around_2ndlug + gravM_around_2ndlug
                 # convert moment of inertia using parallel axis foram
-                MOI += mass * np.array( [0., self.lug_2nd - CG, self.lug_2nd - CG ])**2.
+                MOI += mass * np.array( [0., self.Params.lug_2nd - CG, self.Params.lug_2nd - CG ])**2.
             # END IF
             
             # MOI1 = MOI(t)           # moment of inertia     
@@ -530,7 +586,7 @@ class trajec_main(Rocket):
                 # which is either "t_deploy" [s] after ignition or
                 # "t_para_delay" [s] after apogee detection
                 
-                self.t_deploy = min( self.t_deploy, t + self.t_para_delay )
+                self.Params.t_deploy = min( self.Params.t_deploy, t + self.Params.t_para_delay )
                 self.apogee_count = -1.e10
             #END IF
         #END IF            
@@ -549,16 +605,16 @@ class trajec_main(Rocket):
         #         CG = center of gravity location from the nose tip
         # =======================================
 
-        if t >= self.t_MECO:
+        if t >= self.Params.t_MECO:
             # ---------------------------
             # mass for coasting phase (m, I = const.)
             # ---------------------------
             # mass
-            mass = self.m_dry
+            mass = self.Params.m_dry
             # moment of inertia
-            MOI = self.MOI_dry
+            MOI = self.Params.MOI_dry
             # total CG location
-            CG = self.CG_dry
+            CG = self.Params.CG_dry
             
             return mass, MOI, np.zeros(3), CG
             
@@ -568,35 +624,35 @@ class trajec_main(Rocket):
             # ---------------------------
             # propellant comsumption rate = (impulse consumed so far) / (total impulse)
             time_so_far = np.linspace(0., t)
-            Impulse_so_far = integrate.trapz(self.thrust_function(time_so_far), time_so_far)
-            r = ( 1 - Impulse_so_far/self.Impulse_total )  # impulse ratio
+            Impulse_so_far = integrate.trapz(self.Params.thrust_function(time_so_far), time_so_far)
+            r = ( 1 - Impulse_so_far/self.Params.Impulse_total )  # impulse ratio
             
             # total mass
-            mass = self.m_dry + r * self.m_prop
+            mass = self.Params.m_dry + r * self.Params.m_prop
             # total CG location
-            CG = (self.CG_dry*self.m_dry + self.CG_prop*r*self.m_prop) / mass
+            CG = (self.Params.CG_dry*self.Params.m_dry + self.Params.CG_prop*r*self.Params.m_prop) / mass
             # total MOI using parallel axis theorem
             tmp = np.array([0.,1.,1.])
-            MOI = self.MOI_dry + tmp*self.m_dry*(CG-self.CG_dry)**2. + r*self.MOI_prop + tmp*(CG-self.CG_prop)*(r*self.m_prop)**2.
+            MOI = self.Params.MOI_dry + tmp*self.Params.m_dry*(CG-self.Params.CG_dry)**2. + r*self.Params.MOI_prop + tmp*(CG-self.Params.CG_prop)*(r*self.Params.m_prop)**2.
     
             # ---------------------------------
             # finite differencing for d(MOI)/dt, dm/dt
             # ---------------------------------
             h = 1.E-3
-            Impulse_so_far = integrate.trapz(self.thrust_function(np.linspace(0., t+h)), np.linspace(0., t+h))
-            r2 = (1- Impulse_so_far/self.Impulse_total)  # impulse ratio
+            Impulse_so_far = integrate.trapz(self.Params.thrust_function(np.linspace(0., t+h)), np.linspace(0., t+h))
+            r2 = (1- Impulse_so_far/self.Params.Impulse_total)  # impulse ratio
             # total mass
             # mass2 = self.m_dry + r2 * self.m_prop
             # total CG location
-            CG2 = (self.CG_dry*self.m_dry + self.CG_prop*r2*self.m_prop) / (self.m_dry + r2*self.m_prop) 
+            CG2 = (self.Params.CG_dry*self.Params.m_dry + self.Params.CG_prop*r2*self.Params.m_prop) / (self.Params.m_dry + r2*self.Params.m_prop) 
             # total MOI using parallel axis theorem
-            MOI2 = self.MOI_dry + tmp*self.m_dry*(CG2-self.CG_dry)**2. + r2*self.MOI_prop + tmp*(CG2-self.CG_prop)*(r2*self.m_prop)**2.
+            MOI2 = self.Params.MOI_dry + tmp*self.Params.m_dry*(CG2-self.Params.CG_dry)**2. + r2*self.Params.MOI_prop + tmp*(CG2-self.Params.CG_prop)*(r2*self.Params.m_prop)**2.
 
-            Impulse_so_far = integrate.trapz(self.thrust_function(np.linspace(0., t-h)), np.linspace(0., t-h))
-            r3 = (1- Impulse_so_far/self.Impulse_total)  # impulse ratio
+            Impulse_so_far = integrate.trapz(self.Params.thrust_function(np.linspace(0., t-h)), np.linspace(0., t-h))
+            r3 = (1- Impulse_so_far/self.Params.Impulse_total)  # impulse ratio
             # mass3 = self.m_dry + r3 * self.m_prop
-            CG3 = (self.CG_dry*self.m_dry + self.CG_prop*r3*self.m_prop) / (self.m_dry + r3*self.m_prop)
-            MOI3 = self.MOI_dry + tmp*self.m_dry*(CG3-self.CG_dry)**2. + r3*self.MOI_prop + tmp*(CG3-self.CG_prop)*(r3*self.m_prop)**2.
+            CG3 = (self.Params.CG_dry*self.Params.m_dry + self.Params.CG_prop*r3*self.Params.m_prop) / (self.Params.m_dry + r3*self.Params.m_prop)
+            MOI3 = self.Params.MOI_dry + tmp*self.Params.m_dry*(CG3-self.Params.CG_dry)**2. + r3*self.Params.MOI_prop + tmp*(CG3-self.Params.CG_prop)*(r3*self.Params.m_prop)**2.
     
             # dm/dt and d(MOI)/dt
             # d_dt_m = (mass2 - mass3) / (2*h)
@@ -615,7 +671,7 @@ class trajec_main(Rocket):
         # =======================================
         
         # Coriolis  force in body coord. note that self.omega_earth, omega of earth-spin, is given in local coord.
-        Fcor = 2. * np.cross( (Tbl@self.omega_earth), v )
+        Fcor = 2. * np.cross( (Tbl@self.Params.omega_earth), v )
         
         return Fcor
     
@@ -628,7 +684,7 @@ class trajec_main(Rocket):
         # =======================================
             
         # get thrust power at t=t
-        tmp = self.thrust_function(t)
+        tmp = self.Params.thrust_function(t)
         if tmp < 0:
             # if thrust is nagative, which might happen because of curve fitting, overwrite with 0
             tmp = 0.
@@ -694,13 +750,13 @@ class trajec_main(Rocket):
                       (Cl*cosa + Cd*sina)*np.cos(phi)])    # need check here
         
         # force acting on CP of the body
-        force_all = 0.5 * rho * air_speed**2. * self.X_area * (-C)
+        force_all = 0.5 * rho * air_speed**2. * self.Params.X_area * (-C)
         
         # aerodynamic moment wrt CG
         moment_all = np.cross( np.array([CG - CPloc[0,0],0.,0.]) , force_all )
         
         # add aerodynamic damping effect  (note: Cm_omega < 0)
-        moment_all += 0.25 * rho * air_speed * self.Cm_omega_bar * omega
+        moment_all += 0.25 * rho * air_speed * self.Params.Cm_omega_bar * omega
         
         """
         if self.aero_fin_mode == 'indiv':
@@ -873,7 +929,7 @@ class trajec_main(Rocket):
 
         # air velocity = -rocket_velocity + wind_velocity
         # NOTE: wind(x) is wind velocity in local coord. need conversion to body coord.
-        v_air = -v + np.dot( Tbl, self.wind(x[2]) )   
+        v_air = -v + np.dot( Tbl, self.Params.wind(x[2]) )   
         air_speed = np.linalg.norm(v_air) # air speed (positive scalar)
 
         # total angle-of-attack
@@ -923,13 +979,13 @@ class trajec_main(Rocket):
         
         # air velocity = -rocket_velocity + wind_velocity
         #    NOTE: wind(x) is wind velocity in local coord. need conversion to body coord.
-        v_air = -v + np.dot( Tbl,self.wind(x[2]) )   
+        v_air = -v + np.dot( Tbl,self.Params.wind(x[2]) )   
 
         # air property at the altitude
         _,_,rho,_ = self.standard_air(x[2])
 
         # parachute drag force 
-        parachute_drag = 0.5 * rho * np.linalg.norm(v_air) * v_air * self.S_para * self.Cd_para
+        parachute_drag = 0.5 * rho * np.linalg.norm(v_air) * v_air * self.Params.S_para * self.Params.Cd_para
 
         # print('v_air', v_air, 'speed', np.linalg.norm(v_air))
         return parachute_drag
@@ -946,32 +1002,14 @@ class trajec_main(Rocket):
         # gravitational accel.
         g = 9.81  # [m/s^2]
         
-        
-        """
-        # temperature goes down 0.0065K/m until it reaches -56.5C (216.5K)
-        #                                       it is approximately 11km
-        T = self.T0 - 0.0065*h # [K]
-        
-        
-        # temperature is const at 216.5 K for alt. < 20km
-        if type(T) == np.ndarray:
-            T[T<216.5] = 216.5
-            
-        elif T < 216.5:
-            T = 216.5
-        
-        # pressure
-        p = self.p0 * (T/self.T0)**5.256  #[Pa]
-        """
-        
         if h <= 11.*10**3:
             # *** Troposphere ***
             # temperature lapse rate
             gamma = -0.0065
             # temperature 
-            T = self.T0 + gamma * h # [K]
+            T = self.Params.T0 + gamma * h # [K]
             #pressure
-            p = self.p0 * (T/self.T0)**(-g/(gamma*R)) #[Pa]
+            p = self.Params.p0 * (T/self.Params.T0)**(-g/(gamma*R)) #[Pa]
             
         elif h <= 20.*10**3:
             # *** Tropopause ***
@@ -1057,7 +1095,6 @@ class trajec_main(Rocket):
             
         #END IF
         
-            
         # density
         rho = p/(R*T) #[kg/m^3]
         
@@ -1065,105 +1102,6 @@ class trajec_main(Rocket):
         a = np.sqrt(1.4*R*T) # [m/s]
         
         return T,p,rho,a 
-    
-    
-    def setup_wind(self):
-        # ==============================================
-        # set up wind, i.e. wind speed/direction as a function of altitude.
-        #   default: power law
-        # ==============================================
-        
-        if self.wind_model == 'power':
-            # -------------------
-            # use power law only
-            # -------------------
-            self.wind = self.wind_power
-            
-        elif self.wind_model == 'power-forecast-hydrid':
-            # -------------------
-            # power law and forecast hybrid model
-            # -------------------
-            try:
-                # import weather forecast info                
-                df = pd.read_csv(self.wind_forecast_csvname)                
-            except:
-                print('ERROR: No Forecast Data Available')
-                
-            # altitude array
-            alt = np.array(df['altitude'])
-            
-            # Wind: west to east (x)
-            wind_W2E_tmp = np.array(df['Wind (from west)']) 
-            # south to north (y)
-            wind_S2N_tmp = np.array(df['Wind (from south)'])
-            # Upward (z)
-            wind_UP = np.array(df['Wind (vertical)'])
-            
-            # magnetic angle correction
-            theta = np.deg2rad(8.9)
-            wind_W2E = wind_W2E_tmp * np.cos(theta) + wind_S2N_tmp* np.sin(theta) 
-            wind_S2N =  - wind_W2E_tmp * np.sin(theta) + wind_S2N_tmp* np.cos(theta) 
-            # set as vector (blowing TO)
-            wind_vec_fore = np.c_[wind_W2E, wind_S2N, wind_UP].T
-            
-            # setup wind_forecast interpolation function
-            self.wind_forecast = interpolate.interp1d(alt, wind_vec_fore, fill_value='extrapolate')
-            
-            # definition of wind power-forecast hybrid method
-            def wind_power_forecast(h):
-                if h < 0.:
-                    h = 0.
-                    
-                boundary_alt = 100.    
-                transition = 20.
-                if h <= boundary_alt - transition:
-                    # use power law only
-                    return self.wind_power(h)
-                elif h <= boundary_alt + transition:
-                    # use both
-                    weight = (h - (boundary_alt-transition) ) / (2*transition)  
-                    return weight*self.wind_forecast(h) + (1.-weight)*self.wind_power(h)
-                else:
-                    # use forecast only
-                    return self.wind_forecast(h)
-                # END IF
-            # END OF DIFINITION
-                
-            self.wind = wind_power_forecast
-            
-            """
-            h = np.linspace(0., 150., 100)
-            winwin = np.zeros((3,100))
-            win_fore = np.zeros((3,100))
-            for i in range(100):
-                winwin[:,i] = self.wind(h[i])
-                win_fore[:,i] = self.wind_forecast(h[i])
-            
-            plt.plot(winwin[0,:], h, label='Hybrid: from west')
-            plt.plot(winwin[1,:], h, label='Hybrid: from south')
-            #plt.plot(win_fore[0,:], h, label='Fore: from west')
-            #plt.plot(win_fore[1,:], h, label='Fore; from south')
-            plt.legend()
-            plt.grid()
-            plt.show()
-            a = 0
-            
-            """
-            
-            
-    # definition of wind power law 
-    def wind_power(self, h):
-            if h<0.:
-                h = 0.
-            # END IF
-        
-            # wind velocity in local fixed coordinate (wind vector = direction blowing TO. Wind from west = [1,0,0])
-            wind_vec = self.wind_unitvec * self.wind_speed * (h/self.wind_alt_std)**self.Cwind  
-
-            return wind_vec
-    
-
-        
         
     def aero_coeff(self, Mach,alpha):
         # ==============================================
@@ -1190,13 +1128,13 @@ class trajec_main(Rocket):
         # self.f_cl_alpha(Mach) = slope near AOA=0
         # shape will be lile sin(2*alpha), which means Cl=0 at 90deg
         # therefore, multiply 0.5 to realized the shape sin(2*alpha) as well as slope|AOA=0 = Cl_alpha
-        Cl = self.f_cl_alpha(Mach) * 0.5* np.sin(2*alpha)
+        Cl = self.Params.f_cl_alpha(Mach) * 0.5* np.sin(2*alpha)
         
         # -------------------
         # Drag Coefficient
         # -------------------
         # get zero angle Cd
-        Cd0 = self.f_cd0(Mach)
+        Cd0 = self.Params.f_cd0(Mach)
         
         if self.flag <= 2:
             # powered phase Cd0 correction
@@ -1211,95 +1149,11 @@ class trajec_main(Rocket):
         # -------------------
         # C.P. location
         # -------------------
-        CPloc = self.f_CPloc(Mach, alpha)
+        CPloc = self.Params.f_CPloc(Mach, alpha)
         
         return Cd, Cl, CPloc
         
 
-    def setup_aero_coeffs(self):
-        # ==============================================
-        # set up aerodynamic coefficients and C.P. location interpolations (default)
-        # Put following .dat files in /bin
-        #   Cd0.dat:     Mach numbers vs. Cd0 
-        #   Clalpha.dat: Mach numbers vs. Clalpha
-        #
-        # if self.Mach_AOA_dependent = False, set up simple function that returns constant Cd0, Cl_alpha, and CP location.
-        # ==============================================
-        
-        if self.Mach_AOA_dependent:
-            # When true, setup interpolation curves to represent 
-            # aero coeff dependency on Mach / AOA
-            # --------------------------
-            # drag coeff. at 0 AOA
-            # --------------------------
-            # setup Cd0 (Cd at AOA=0) curve as a function of Mach number
-            # Cd0 = 0.6 here, but actural Cd in the program is scaled by the config input Cd0.
-            
-            # read dat file that contains Mach vs Cd0 relations.
-            # n*2 ndarray. 1st column: Mach numbers, 2nd column: Cd0s. 
-            data = np.loadtxt('bin/Cd0.dat',delimiter=",", skiprows=1)
-            Mach_array = data[:,0]
-            Cd0_array = data[:,1] * ( self.Cd0 / data[0,1] ) # scaling
-            
-            # create 2d interpolation (Mach vs Cd0)
-            self.f_cd0 = interpolate.interp1d(Mach_array,Cd0_array,kind='linear')
-            
-            # --------------------------
-            # lift coeff. slope
-            # --------------------------
-            # setup Cl_alpha (Cl slope wrt AOA) curve as a function of Mach number
-            # Cl_alpha = 10.0 (M=0.3) here, but actural Cl_alpha in the program is scaled by the config input Cl_alpha.
-            
-            # read dat file that contains Mach vs Cl_alpha relations.
-            # n*2 ndarray. 1st column: Mach numbers, 2nd column: Cl_alpha 
-            data = np.loadtxt('bin/Clalpha.dat',delimiter=",", skiprows=1)
-            Mach_array = data[:,0]
-            Clalpha_array = data[:,1] * ( self.Cl_alpha / data[0,1] ) # scaling
-            
-            # create 2d interpolation (Mach vs Cl_alpha        
-            self.f_cl_alpha = interpolate.interp1d(Mach_array,Clalpha_array,kind='linear')
-            
-            # --------------------------
-            # C.P. location 
-            # --------------------------
-            # import C.P. location data 
-            df = pd.read_csv("bin/CPloc.csv", header=None, na_values='Mach/AOA')
-            Mach_array = np.array(df.iloc[1:,0])  # mach array
-            AOA_array = np.array(df.iloc[0,1:]) * np.pi/180.  # AOA array (convert from deg to rad)
-            # create grid
-            Mach2, AOA2 = np.meshgrid(Mach_array, AOA_array)
-            
-            # CPlocation 2D array (rows: Mach, columns: AOA)
-            CPloc_array = np.array(df.iloc[1:,1:]) 
-            # convert from % to len, and scaling. Use CPloc at M=0.3, AOA=2deg as standard 
-            # tmpfunc = interpolate.interp2d(Mach2, AOA2, CPloc_array.T, kind='linear')
-            tmpfunc = interpolate.RectBivariateSpline(Mach_array, AOA_array, CPloc_array)
-            CPloc_array *= self.CP_body /tmpfunc(0.3, np.deg2rad(2.))
-        
-            # create 2d interpolation curve
-            self.f_CPloc =interpolate.RectBivariateSpline(Mach_array, AOA_array, CPloc_array)
-            
-        else:
-            def f_cd0(a):
-                 # constant Cd0
-                return self.Cd0
-            
-            def f_cl_alpha(a):
-                # constant Cl_alpha
-                return self.Cl_alpha
-            
-            def f_CPloc(a,b):
-                # constant CPlocation
-                return np.array([self.CP_body])
-            
-            self.f_cd0 = f_cd0
-            self.f_cl_alpha = f_cl_alpha
-            self.f_CPloc = f_CPloc
-        # END IF
-        
-        return None
-    
-        
     def state2vecs_quat(self,u):
         # convert state vector u to vectors
         x = u[0:3]     # translation         :in fixed coordinate
