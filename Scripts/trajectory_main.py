@@ -589,7 +589,7 @@ class Trajec_main():
                 self.Params.t_deploy = min( self.Params.t_deploy, t + self.Params.t_para_delay )
                 self.apogee_count = -1.e10
             #END IF
-        #END IF            
+        #END IF         
         
         return du_dt
         

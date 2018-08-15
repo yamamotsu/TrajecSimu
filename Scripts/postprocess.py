@@ -52,9 +52,7 @@ class PostProcess_single():
             
             # create time array to find out the max values 
             time = self.myrocket.trajectory.t    # extract time array
-            dt = self.myrocket.Params.dt                # time step
-            land_time_id = int(np.ceil(self.myrocket.trajectory.landing_time/dt)) # id of time array when the rocket landed
-            time = time[0:land_time_id] # array before landing: cut off useless after-landing part
+            time = time[time<=self.myrocket.trajectory.landing_time ] # array before landing: cut off useless after-landing part
             # cut off useless info out of ODE solution array
             self.myrocket.trajectory.solution = self.myrocket.trajectory.solution[0:len(time),:]
             
@@ -74,10 +72,8 @@ class PostProcess_single():
         
             # creat time array to plot
             time = self.myrocket.trajectory.t     # extract time array
-            dt = self.myrocket.Params.dt                 # time step
-            land_time_id = int(np.ceil(self.myrocket.trajectory.landing_time/dt)) # id of time array when the rocket landed
-            time = time[0:land_time_id] # array before landing: cut off useless after-landing part
-            # cut off useless info out of ODE solution array
+            time = time[time<=self.myrocket.trajectory.landing_time ]  # array before landing: cut off useless after-landing part
+            # cut off useless info out of ODE solution array 
             self.myrocket.trajectory.solution = self.myrocket.trajectory.solution[0:len(time),:]
             
             # *** plot and show all results ***
@@ -409,22 +405,25 @@ class PostProcess_single():
         
         # split arrays for each flight mode
         t_MECO = self.myrocket.Params.t_MECO
-        t_deploy = self.myrocket.Params.t_deploy
-        dt = self.myrocket.Params.dt
+        t_deploy = self.myrocket.trajectory.Params.t_deploy
+        # dt = self.myrocket.Params.dt
         
         # ***_t: thrusted flight (before MECO)
         # ***_c: coasting flight
         # ***_p: parachute fall
         try:
-            time_t, time_c, time_p = np.split(time,[ int(np.ceil(t_MECO/dt)), int(np.ceil(t_deploy/dt)) ] )
-            xloc_t, xloc_c, xloc_p = np.split(xloc,[ int(np.ceil(t_MECO/dt)), int(np.ceil(t_deploy/dt)) ] )
-            yloc_t, yloc_c, yloc_p = np.split(yloc,[ int(np.ceil(t_MECO/dt)), int(np.ceil(t_deploy/dt)) ] )
-            zloc_t, zloc_c, zloc_p = np.split(zloc,[ int(np.ceil(t_MECO/dt)), int(np.ceil(t_deploy/dt)) ] )
+            MECO_id = np.argmin(abs(time - t_MECO))
+            deploy_id = np.argmin(abs(time - t_deploy))
+            time_t, time_c, time_p = np.split(time,[ MECO_id, deploy_id ] )
+            xloc_t, xloc_c, xloc_p = np.split(xloc,[ MECO_id, deploy_id ] )
+            yloc_t, yloc_c, yloc_p = np.split(yloc,[ MECO_id, deploy_id ] )
+            zloc_t, zloc_c, zloc_p = np.split(zloc,[ MECO_id, deploy_id ] )
         except:
-            time_t, time_c = np.split(time,[int(np.ceil(t_MECO/dt))])
-            xloc_t, xloc_c = np.split(xloc,[int(np.ceil(t_MECO/dt))])
-            yloc_t, yloc_c = np.split(yloc,[int(np.ceil(t_MECO/dt))])
-            zloc_t, zloc_c = np.split(zloc,[int(np.ceil(t_MECO/dt))])
+            MECO_id = np.argmin(abs(time - t_MECO))
+            time_t, time_c = np.split(time,[MECO_id])
+            xloc_t, xloc_c = np.split(xloc,[MECO_id])
+            yloc_t, yloc_c = np.split(yloc,[MECO_id])
+            zloc_t, zloc_c = np.split(zloc,[MECO_id])
             
             # create plot
         fig = plt.figure(2)
