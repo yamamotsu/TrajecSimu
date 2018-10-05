@@ -400,7 +400,8 @@ class Parameters():
         self.Impulse_total = integrate.trapz(self.thrust_array, self.time_array) # total impulse
         self.Thrust_avg    = self.Impulse_total / self.time_array[-1]  # averaged thrust
         self.t_MECO        = self.time_array[-1] # MECO time
-        
+
+        self.It_poly_error = 0.
         
         if self.thrust_input_type == 'rectangle':
             # set 1d interpolation function for rectangle thrust
@@ -432,9 +433,10 @@ class Parameters():
                 # define polynomial that returns thrust for a given time (fitted thrust curve)
                 self.thrust_function = np.poly1d(a_fit)
                 # total impulse for fitting function
-                thrust_poly = self.thrust_function(self.time_array)   # polynomially fitted thrust curve
+                time_for_poly = np.linspace(self.time_array[0], self.time_array[-1], 1e4)
+                thrust_poly = self.thrust_function(time_for_poly)   # polynomially fitted thrust curve
                 thrust_poly[thrust_poly<0.] = 0.                      # overwrite negative value with 0
-                Impulse_total_poly = integrate.trapz(thrust_poly, self.time_array)
+                Impulse_total_poly = integrate.trapz(thrust_poly, time_for_poly)
                 # error of total impulse [%]
                 self.It_poly_error = abs(Impulse_total_poly - self.Impulse_total) / self.Impulse_total * 100.
             else:
@@ -442,6 +444,7 @@ class Parameters():
                 self.thrust_function = interpolate.interp1d(self.time_array, self.thrust_array, fill_value='extrapolate')    
             # END IF
         # END IF
+
         return None
 
     """

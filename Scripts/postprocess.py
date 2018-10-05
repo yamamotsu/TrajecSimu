@@ -15,6 +15,7 @@ from PIL import Image
 from mpl_toolkits.mplot3d import Axes3D
 import sympy.geometry as sg
 import quaternion
+from Scripts.errors import *
 
 
 """
@@ -247,12 +248,14 @@ class PostProcess_single():
             print('--------------------')
             print(' THRUST DATA ECHO')
             print(' total impulse (raw): ', self.myrocket.Params.Impulse_total, '[N.s]')
+
             try:
                 if self.myrocket.Params.curve_fitting:
-                    print('       error due to poly. fit: ', self.myrocket.Params.It_poly_error, ' [%]')    
+                    print('       error due to poly. fit: ', self.myrocket.Params.It_poly_error, ' [%]')   
                 # END IF
             except:
                 pass
+
             print(' burn time: ', self.myrocket.Params.t_MECO, '[s]')
             print(' max. thrust: ', self.myrocket.Params.Thrust_max, '[N]')
             print(' average thrust: ', self.myrocket.Params.Thrust_avg, '[N]')
@@ -263,9 +266,10 @@ class PostProcess_single():
             plt.plot(self.myrocket.Params.time_array, self.myrocket.Params.thrust_array, color='red', label='raw')
             try:
                 if self.myrocket.Params.curve_fitting:
-                    thrust_used = self.myrocket.Params.thrust_function(self.myrocket.Params.time_array)
-                    thrust_used[thrust_used<0.] = 0.
-                    plt.plot(self.myrocket.Params.time_array, thrust_used, lw = 3, label='fitted')
+                    time_for_fit = np.linspace(self.myrocket.Params.time_array[0], self.myrocket.Params.time_array[-1], 1e4)
+                    thrust_fit = self.myrocket.Params.thrust_function(time_for_fit)
+                    thrust_fit[thrust_fit<0.] = 0.
+                    plt.plot(time_for_fit, thrust_fit, lw = 2, label='fitted')
                 # END IF
             except:
                 pass
@@ -276,7 +280,11 @@ class PostProcess_single():
             plt.legend()
             #plt.show () 
         # END IF
-        
+        # detect poor curve fitting
+        if self.myrocket.Params.It_poly_error > 5.:
+            raise CurveFittingError('!!!  WARNING: POOR THRUST CURVE FITTING. Recommend: curve_fitting=True in config file. !!!')
+
+
         return None
         
     def get_landing_location(self, show=False):
