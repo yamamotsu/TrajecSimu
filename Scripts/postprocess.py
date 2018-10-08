@@ -35,48 +35,48 @@ class PostProcess_single():
 
     def postprocess(self,process_type='all'):
         # =============================================
-        # this method controls post-processing. 
+        # this method controls post-processing.
         #
         # INPUT: process_type = post-processing type. default = 'all'
         #        dict_type = type of parameters
-        #                    'location'   : returns only landing location. 
+        #                    'location'   : returns only landing location.
         #                    'maxval'     : returns max values of interest along with the landing location
         #                    'all'        : plot all variable histories along with max values and landing location.
         # =============================================
-       
+
         if process_type == 'location':
             # *** get landing location  ***
             self.get_landing_location()
-           
+
         elif process_type == 'maxval':
             # *** return max M, q, speed, altitude, flight time, and landing location  ***
-            
-            # create time array to find out the max values 
+
+            # create time array to find out the max values
             time = self.myrocket.trajectory.t    # extract time array
             time = time[time<=self.myrocket.trajectory.landing_time ] # array before landing: cut off useless after-landing part
             # cut off useless info out of ODE solution array
             self.myrocket.trajectory.solution = self.myrocket.trajectory.solution[0:len(time),:]
-            
+
             # get thrust deta
             self.echo_thrust()
             # get landing location
-            self.get_landing_location() 
+            self.get_landing_location()
             # get flight details
             self.get_flight_detail(time)
-            
+
         elif process_type == 'all':
             # *** plot all variable histories along with max values and landing location ***
             print('============================')
             print('  Post-processing')
             print('============================')
             print(' ')
-        
+
             # creat time array to plot
             time = self.myrocket.trajectory.t     # extract time array
             time = time[time<=self.myrocket.trajectory.landing_time ]  # array before landing: cut off useless after-landing part
-            # cut off useless info out of ODE solution array 
+            # cut off useless info out of ODE solution array
             self.myrocket.trajectory.solution = self.myrocket.trajectory.solution[0:len(time),:]
-            
+
             # *** plot and show all results ***
             # thrust data echo
             self.echo_thrust(True)
@@ -93,41 +93,41 @@ class PostProcess_single():
             # plot angular velocity history
             self.plot_omega(time)
             # plot Mach number history
-            
+
             # plot dynamic pressure history
-            
+
             # show all plots
             plt.show()
-            
+
             """
             # output csv file of 1st 3 seconds (launch clear)
             head = 'time, x, y, z, u, v, w, q1, q2, q3, q4, p, q, r'
             output_log = np.c_[ time[time<3.], self.trajectory.solution[time<3., :]]
-            try:    
+            try:
                 np.savetxt('results/log_first3s.csv', output_log, header=head, delimiter=', ')
             except:
                 subprocess.run(['mkdir', 'results'])
                 np.savetxt('results/log_first3s.csv', output_log, header=head, delimiter=', ')
             """
-            
+
         else:
             # if input variable "process_type" is incorrect, show error message
             print('error: process_type must be "location" or "max" or "all". ')
         #END IF
-        
+
         return None
-    
+
     def launch_clear_v(self, time, flag_tipoff = False):
         # =============================================
         # this method returns launch clear velocity
         # =============================================
         # if detail = True, echo and compute tip-off rotation
-        
+
         # use initial 5sec data
         indices = time<5.
         time = time[indices]
         sol = self.myrocket.trajectory.solution[indices,:]
-            
+
         # --------------------
         #   launch clear info
         # --------------------
@@ -135,17 +135,17 @@ class PostProcess_single():
         indices = sol[:,2] <= self.myrocket.Params.rail_height
         time_tmp = time[indices]
         sol_tmp = sol[indices, :]
-        
+
         # vector values at nozzle clear
         x,v,q,omega = self.myrocket.trajectory.state2vecs_quat(sol_tmp[-1,:])
         Tbl = quaternion.as_rotation_matrix(np.conj(q))
         # get nozzle clear air speed
         air_speed_clear, _, AoA, _ = self.myrocket.trajectory.air_state(x,v,Tbl)
-        
+
         self.launch_clear_airspeed = air_speed_clear
         self.launch_clear_time = time_tmp[-1]
-        
-        
+
+
         # compute tip-off rotation
         if flag_tipoff:
             # --------------------
@@ -155,7 +155,7 @@ class PostProcess_single():
             indices = sol[:,2] <= self.myrocket.Params.height_nozzle_off
             time = time[indices]
             sol = sol[indices, :]
-            
+
             # vector values at nozzle clear
             x,v,q,omega = self.myrocket.trajectory.state2vecs_quat(sol[-1,:])
             Tbl = quaternion.as_rotation_matrix(np.conj(q))
@@ -165,7 +165,7 @@ class PostProcess_single():
             Euler_nozzle_clear = quaternion.as_euler_angles(q)
             # nozzle off time
             time_nozzle_off = time[-1]
-            
+
             # --------------------
             #   2nd lug clear info
             # --------------------
@@ -173,7 +173,7 @@ class PostProcess_single():
             indices = sol[:,2] <= self.myrocket.Params.height_2ndlug_off
             time = time[indices]
             sol = sol[indices, :]
-            
+
             # vector values at 2nd lug clear
             x,v,q,omega = self.myrocket.trajectory.state2vecs_quat(sol[-1,:])
             Tbl = quaternion.as_rotation_matrix(np.conj(q))
@@ -183,7 +183,7 @@ class PostProcess_single():
             Euler_2ndlug_clear = quaternion.as_euler_angles(q)
             # 2nd lug off time
             time_2ndlug_off = time[-1]
-        
+
             # --------------------
             #   1st lug clear info
             # --------------------
@@ -191,7 +191,7 @@ class PostProcess_single():
             indices = sol[:,2] >= self.myrocket.Params.height_1stlug_off
             time = time[indices]
             sol = sol[indices, :]
-            
+
             # vector values at 2nd lug clear
             x,v,q,omega = self.myrocket.trajectory.state2vecs_quat(sol[0,:])
             Tbl = quaternion.as_rotation_matrix(np.conj(q))
@@ -201,13 +201,13 @@ class PostProcess_single():
             Euler_1stlug_clear = quaternion.as_euler_angles(q)
             # 2nd lug off time
             time_1stlug_off = time[0]
-            
+
             # --------------------
-            # compute tip off 
+            # compute tip off
             # --------------------
             Euler_1st_2nd = np.rad2deg ( Euler_2ndlug_clear - Euler_1stlug_clear )  # deg
             Euler_2nd_noz = np.rad2deg ( Euler_nozzle_clear - Euler_2ndlug_clear )  # deg
-        
+
             print('--------------------')
             print(' Tip-off effect summary')
             print(' 1st lug clear at t=', "{0:.5f}".format(time_1stlug_off), '[s], airspeed=', "{0:.3f}".format(air_speed_1stlug_clear), '[m/s], AoA=', "{0:.3f}".format(np.rad2deg(AoA_1stlug_clear)), ' [deg]')
@@ -216,27 +216,27 @@ class PostProcess_single():
             np.set_printoptions(formatter={'float': '{: 0.3e}'.format})
             print(' rotation Euler angle [deg] for 1stlug>2ndlug: ', Euler_1st_2nd, ' / 2ndlug>nozzle: ', Euler_2nd_noz )
             print('--------------------')
-        
+
         """
         else:
             # get launch clear speed. ignore tip-of effect
-            
+
             self.launch_clear_airspeed
         """
-        
-        
+
+
     def echo_thrust(self,show=False):
         # =============================================
         # this method plots thrust curve along with engine properties
         # =============================================
-        
+
         # engine properties
-        
+
         # compute Isp
         Isp = self.myrocket.Params.Impulse_total / (self.myrocket.Params.m_prop * 9.81)
-            
+
         # record engine property
-        tmp_dict = {'total_impulse  ': self.myrocket.Params.Impulse_total, 
+        tmp_dict = {'total_impulse  ': self.myrocket.Params.Impulse_total,
                     'max_thrust'     : self.myrocket.Params.Thrust_max,
                     'average_thrust' : self.myrocket.Params.Thrust_avg,
                     'burn_time'      : self.myrocket.Params.t_MECO,
@@ -251,7 +251,7 @@ class PostProcess_single():
 
             try:
                 if self.myrocket.Params.curve_fitting:
-                    print('       error due to poly. fit: ', self.myrocket.Params.It_poly_error, ' [%]')   
+                    print('       error due to poly. fit: ', self.myrocket.Params.It_poly_error, ' [%]')
                 # END IF
             except:
                 pass
@@ -278,7 +278,7 @@ class PostProcess_single():
             plt.ylabel('thrust [N]')
             plt.grid()
             plt.legend()
-            #plt.show () 
+            #plt.show ()
         # END IF
         # detect poor curve fitting
         if self.myrocket.Params.It_poly_error > 5.:
@@ -286,20 +286,20 @@ class PostProcess_single():
 
 
         return None
-        
+
     def get_landing_location(self, show=False):
         # =============================================
         # this method gets the location that the rocket has landed
         # =============================================
-        
+
         # landing point coordinate is is stored at the end of array "history"
         xloc = self.myrocket.trajectory.solution[-1,0]
         yloc = self.myrocket.trajectory.solution[-1,1]
         zloc = self.myrocket.trajectory.solution[-1,2]
-        
+
         # record landing location in dict
         self.myrocket.res.update( { 'landing_loc' : np.array([xloc, yloc]) } )
-        
+
         if show:
             # show result
             print('----------------------------')
@@ -307,18 +307,18 @@ class PostProcess_single():
             print('[x,y,z] = ', xloc, yloc, zloc)
             print('----------------------------')
         # END IF
-        
+
         return None
-        
-        
+
+
     def get_flight_detail(self,time, show=False):
         # =============================================
         # this method gets flight detail (max values of M, q, speed, altitude)
         # =============================================
-        
+
         # get launch clear and tip-off info
         self.launch_clear_v(time, show)
-        
+
         # array of rho, a histories: use standard air
         n = len(self.myrocket.trajectory.solution[:,2])
         T = np.zeros(n)
@@ -326,13 +326,13 @@ class PostProcess_single():
         rho = np.zeros(n)
         a = np.zeros(n)
         # time array
-        time = self.myrocket.trajectory.t 
-        
-        
+        time = self.myrocket.trajectory.t
+
+
         for i in range(n):
             T[i],p[i],rho[i],a[i] = self.myrocket.trajectory.standard_air(self.myrocket.trajectory.solution[i,2])  # provide altitude=u[2]
         #END IF
-        
+
         # array of speed history
         speed = np.linalg.norm(self.myrocket.trajectory.solution[:,3:6],axis=1) # provide velocity=u[3:6]
         # index of max. Mach number
@@ -346,14 +346,14 @@ class PostProcess_single():
         # get wind speed at Max_Q
         wind_vec = self.myrocket.trajectory.Params.wind(self.myrocket.trajectory.solution[Q_max,2]*4.)  # provide altitude=u[2]
         wind_speed = np.linalg.norm(wind_vec)
-        
+
         # ------------------------------
         # record flight detail
         # ------------------------------
         maxq_dict = {'max_Q' : 0.5*rho[Q_max]*speed[Q_max]**2.,  # max. dynamic pressure
                      'time'  : time[Q_max],                      # time
                      'free_stream_pressure': p[Q_max],
-                     'free_stream_temperature' : T[Q_max], 
+                     'free_stream_temperature' : T[Q_max],
                      'free_stream_Mach: ' : speed[Q_max]/a[Q_max],
                      'wind_speed: ' : wind_speed,
                      'AoA_for_gustrate2' : np.arctan( wind_speed/speed[Q_max])*180./np.pi,
@@ -367,7 +367,7 @@ class PostProcess_single():
                     }
         tmp_dict.update( self.myrocket.trajectory.res_trajec_main )  # add results from trajectory
         self.myrocket.res.update({'flight_detail' : tmp_dict})
-        
+
         if show:
             # show results
             print('----------------------------')
@@ -378,7 +378,7 @@ class PostProcess_single():
             print(' total flight time: ', "{0:.2f}".format(self.myrocket.trajectory.landing_time),'[s]')
             print(' launch clear velocity: ',  "{0:.2f}".format(self.launch_clear_airspeed),'[m/s] at t=',  "{0:.2f}".format(self.launch_clear_time),'[s]')
             print('----------------------------')
-            
+
             # output flight condition at Max.Q
             print(' Flight conditions at Max-Q.')
             print(' free-stream pressure: ', "{0:6.2e}".format(p[Q_max]) ,'[Pa]')
@@ -386,11 +386,11 @@ class PostProcess_single():
             print(' free-stream Mach: ', "{0:.3f}".format(speed[Q_max]/a[Q_max]) )
             print(' Wind speed: ',  "{0:.2f}".format(wind_speed),'[m/s]')
             print(' Angle of attack for gust rate 2: ', "{0:.1f}".format(np.arctan( wind_speed/speed[Q_max])*180./np.pi ),'[deg]')
-            print('----------------------------')  
+            print('----------------------------')
 
-        return None  
-        
-        
+        return None
+
+
     def visualize_trajectory(self,time):
         # =============================================
         # this method visualizes 3D trajectory
@@ -404,18 +404,18 @@ class PostProcess_single():
         """
         # adjust array length
         if len(time) < len(xloc):
-            # adjust the length of time array 
+            # adjust the length of time array
             xloc = xloc[0:len(time)]
             xloc = xloc[0:len(time)]
             xloc = xloc[0:len(time)]
         # END IF
         """
-        
+
         # split arrays for each flight mode
         t_MECO = self.myrocket.Params.t_MECO
         t_deploy = self.myrocket.trajectory.Params.t_deploy
         # dt = self.myrocket.Params.dt
-        
+
         # ***_t: thrusted flight (before MECO)
         # ***_c: coasting flight
         # ***_p: parachute fall
@@ -432,11 +432,11 @@ class PostProcess_single():
             xloc_t, xloc_c = np.split(xloc,[MECO_id])
             yloc_t, yloc_c = np.split(yloc,[MECO_id])
             zloc_t, zloc_c = np.split(zloc,[MECO_id])
-            
+
             # create plot
         fig = plt.figure(2)
         ax = Axes3D(fig)
-        
+
         # plot powered-phase trajectory
         ax.plot(xloc_t, yloc_t, zloc_t,lw=3,label='Powered')
 
@@ -445,44 +445,44 @@ class PostProcess_single():
             ax.plot(xloc_c, yloc_c, zloc_c,lw=3,label='Coast')
         except:
             pass
-        
+
         # plot parachute descent-phase trajectory
         try:
             ax.plot(xloc_p, yloc_p, zloc_p,lw=3,label='Parachute')
         except:
             pass
-            
+
         ax.set_xlabel('x')
         ax.set_ylabel('y')
         ax.set_zlabel('z')
         ax.set_title('Trajectory')
-        ax.patch.set_alpha(0.9) 
+        ax.patch.set_alpha(0.9)
         ax.legend()
         # ax.set_aspect('equal')
         #.show()
-        
+
         return None
-    
-    
+
+
     def plot_loc(self,time):
         # =============================================
         # this method plots x,y,z location as a function of time
         # =============================================
-        
+
         # xyz location history
         xloc = self.myrocket.trajectory.solution[:,0]
         yloc = self.myrocket.trajectory.solution[:,1]
         zloc = self.myrocket.trajectory.solution[:,2]
-    
+
         """
         # time array
         time = self.trajectory.t
         if len(time) > len(xloc):
-            # adjust the length of time array 
+            # adjust the length of time array
             time = time[0:len(xloc)]
         # END IF
         """
-        
+
         # create plot
         plt.figure(3)
         # plot x history
@@ -496,30 +496,30 @@ class PostProcess_single():
         plt.xlabel('t [s]')
         plt.ylabel('xyz [m]')
         plt.grid()
-        #plt.show   
-        
+        #plt.show
+
         return None
-        
+
     def plot_velocity(self,time):
         # =============================================
         # this method plots u,v,w (velocity wrt earth) as a function of time
         # =============================================
-        
+
         # velocity = [u,v,w] history
         u = self.myrocket.trajectory.solution[:,3]
         v = self.myrocket.trajectory.solution[:,4]
         w = self.myrocket.trajectory.solution[:,5]
         speed = np.linalg.norm(self.myrocket.trajectory.solution[:,3:6],axis=1)
-        
+
         """
         # time array
         time = self.trajectory.t
         if len(time) > len(u):
-            # adjust the length of time array 
+            # adjust the length of time array
             time = time[0:len(u)]
         # END IF
         """
-        
+
         plt.figure(4)
         # u history
         plt.plot(time,u,lw=1.5,label='Vx')
@@ -534,44 +534,44 @@ class PostProcess_single():
         plt.xlabel('t [s]')
         plt.ylabel('v [m/s]')
         plt.grid()
-        #plt.show  
-        
+        #plt.show
+
         return None
-        
+
     def plot_omega(self,time):
         # =============================================
         # this method plots omega_x,y,z velocity and speed as a function of time
         # =============================================
-        
+
         # omega = [p,q,r] history
         p = self.myrocket.trajectory.solution[:,10]  # angular velocity around x
         q = self.myrocket.trajectory.solution[:,11]  # angular velocity y
         r = self.myrocket.trajectory.solution[:,12]  # angular velocity z
-        
+
         """
         # time array
         time = self.trajectory.t
         if len(time) > len(p):
-            # adjust the length of time array 
+            # adjust the length of time array
             time = time[0:len(p)]
         # END IF
         """
-        
+
         plt.figure(5)
-        # p history 
+        # p history
         plt.plot(time,p,lw=1.5,label='omega_x')
         # q history
         plt.plot(time,q,lw=1.5,label='omega_y')
         # r history
         plt.plot(time,r,lw=1.5,label='omega_z')
-    
+
         plt.legend()
         plt.title('Angular velocity vs. time')
         plt.xlabel('t [s]')
         plt.ylabel('omega [rad/s]')
         plt.grid()
-        #plt.show 
-        
+        #plt.show
+
         return None
 
 
@@ -592,7 +592,7 @@ class PostProcess_dist():
         # !!!! hardcoding for 2018 izu ura-sabaku
         # Set limit range in maps (Defined by North latitude and East longitude)
         # -----------------------------------
-        #  Define permitted range 
+        #  Define permitted range
         # -----------------------------------
         point_rail = np.array([34.735972, 139.420944])
         point_switch = np.array([34.735390, 139.421377])
@@ -606,6 +606,8 @@ class PostProcess_dist():
                                 [34.741672,	139.417387],
                                 [34.735715,	139.420922],
                                 ])
+        # NOTE: 2018/10/8 added for bugfix
+        self.lim_radius = 50.0
 
         # -------- End definition --------
 
@@ -688,7 +690,7 @@ class PostProcess_dist():
 
         # Set magnetic declination
         mag_dec = -8.9  # [deg] @ noshiro
-        
+
         #to add if necessary
         #used as "under_line", meaning MUST drop under(south) the line
         # point_point2 = np.array([[40.23665, 140.00579],
@@ -727,7 +729,7 @@ class PostProcess_dist():
         self.xy_center[0] = lon2met * point_center[1]
         self.xy_rail[1] = lat2met * point_rail[0]
         self.xy_rail[0] = lon2met * point_rail[1]
-        
+
         mag_dec = np.deg2rad(mag_dec)
         mat_rot = np.array([[np.cos(mag_dec), -1 * np.sin(mag_dec)],
                             [np.sin(mag_dec), np.cos(mag_dec)]])
@@ -757,11 +759,10 @@ class PostProcess_dist():
     # ------------------------------
     # method for plot map and landing points
     # ------------------------------
-    def plot_map(self):      
+    def plot_map(self):
         if self.launch_location == 'izu':
             #for IZU URA-SABAKU!!
             # Set limit range in maps
-            lim_radius = 50.0   # define circle limit area
             self.set_coordinate_izu()
 
             # for tamura version
@@ -789,9 +790,9 @@ class PostProcess_dist():
             color_circle = 'r'    # Red
 
             # Set circle object
-            cir_rail = patches.Circle(xy=self.xy_rail, radius=lim_radius, ec=color_circle, fill=False)
-            cir_switch = patches.Circle(xy=self.xy_switch, radius=lim_radius, ec=color_circle, fill=False)
-            cir_tent = patches.Circle(xy=self.xy_tent, radius=lim_radius, ec=color_circle, fill=False)
+            cir_rail = patches.Circle(xy=self.xy_rail, radius=self.lim_radius, ec=color_circle, fill=False)
+            cir_switch = patches.Circle(xy=self.xy_switch, radius=self.lim_radius, ec=color_circle, fill=False)
+            cir_tent = patches.Circle(xy=self.xy_tent, radius=self.lim_radius, ec=color_circle, fill=False)
             ax.add_patch(cir_rail)
             ax.add_patch(cir_switch)
             ax.add_patch(cir_tent)
@@ -864,7 +865,7 @@ class PostProcess_dist():
             #ax.add_patch(cir_switch)
             #ax.add_patch(cir_tent)
             ax.add_patch(cir_center)
-              
+
             # plot map
             plt.imshow(img_list, extent=(img_left, img_right, img_bottom, img_top))
 
@@ -961,10 +962,10 @@ class JudgeInside():
 
 
     def judge_inside(self, check_point):
-        
+
         # initialize bool for result
         judge_result = True
-        
+
         # check inside circles-------------------------------------
         if self.inside_center is None:
             circle_flag1 = False
@@ -1099,10 +1100,11 @@ class JudgeInside():
                         # point places right side of line
                     #    pass
 
-                    # odd number : inside,  even number : outside
-                    if np.mod(cross_num, 2) == 0:
-                        # outside of the range. Nogo
-                        judge_result = False
+            # odd number : inside,  even number : outside
+            # NOTE: 2018/10/8 fixed
+            if np.mod(cross_num, 2) == 0:
+                # outside of the range. Nogo
+                judge_result = False
 
         # Convert from float to bool (True:inside,  False:outside)
         # judge_result = np.bool(judge_result)
@@ -1115,5 +1117,5 @@ if __name__ == '__main__':
     tmp = PostProcess_dist('noshiro_sea')
     tmp.set_coordinate_noshiro()
     tmp.plot_map()
-                    
+
 #END IF
