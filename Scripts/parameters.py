@@ -570,6 +570,9 @@ class Parameters():
         elif self.wind_model == 'log':
             self.wind = self.wind_log
 
+        elif self.wind_model == 'forecast':
+            seld.wind = self.wind_forecast
+
         elif self.wind_model == 'power-forecast-hybrid':
             # -------------------
             # power law and forecast hybrid model
