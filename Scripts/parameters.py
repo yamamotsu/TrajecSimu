@@ -189,8 +189,12 @@ class Parameters():
             self.Cwind        = 1./float( self.params_dict['wind_power_coeff'] )          # wind power coefficient
             self.wind_alt_std = float( self.params_dict['wind_alt_std'])
             self.wind_model   = self.params_dict['wind_model']
-            if self.wind_model == 'power-forecast-hydrid':
-                self.wind_forecast_csvname = self.params_dict['forecast_csvname']         # csv file name of wind forecast model
+
+            #if self.wind_model == 'power-forecast-hydrid':
+            #    self.wind_forecast_csvname = self.params_dict['forecast_csvname']        # csv file name of wind forecast model
+            if self.params_dict['forecast_csvname'] != None:
+                self.wind_forecast_csvname = self.params_dict['forecast_csvname']
+                self.setup_forcast()
 
             # earth gravity
             self.grav = np.array([0.,0.,-9.81])    # in fixed coordinate
@@ -566,36 +570,10 @@ class Parameters():
         elif self.wind_model == 'log':
             self.wind = self.wind_log
 
-        elif self.wind_model == 'power-forecast-hydrid':
+        elif self.wind_model == 'power-forecast-hybrid':
             # -------------------
             # power law and forecast hybrid model
             # -------------------
-            try:
-                # import weather forecast info
-                df = pd.read_csv(self.wind_forecast_csvname)
-            except:
-                raise FileNotFoundError(' Wind forecast data file not found')
-
-            # altitude array
-            alt = np.array(df['altitude'])
-
-            # Wind: west to east (x)
-            wind_W2E_tmp = np.array(df['Wind (from west)'])
-            # south to north (y)
-            wind_S2N_tmp = np.array(df['Wind (from south)'])
-            # Upward (z)
-            wind_UP = np.array(df['Wind (vertical)'])
-
-            # magnetic angle correction
-            theta = np.deg2rad(8.9)
-            wind_W2E = wind_W2E_tmp * np.cos(theta) + wind_S2N_tmp* np.sin(theta)
-            wind_S2N =  - wind_W2E_tmp * np.sin(theta) + wind_S2N_tmp* np.cos(theta)
-            # set as vector (blowing TO)
-            wind_vec_fore = np.c_[wind_W2E, wind_S2N, wind_UP].T
-
-            # setup wind_forecast interpolation function
-            self.wind_forecast = interpolate.interp1d(alt, wind_vec_fore, fill_value='extrapolate')
-
             # definition of wind power-forecast hybrid method
             def wind_power_forecast(h):
                 if h < 0.:
@@ -624,6 +602,33 @@ class Parameters():
             self.wind = wind_power_forecast
         else:
             raise ParameterDefineError('wind model definition is wrong.')
+
+    def setup_forcast(self):
+        try:
+            # import weather forecast info
+            df = pd.read_csv(self.wind_forecast_csvname)
+        except:
+            raise FileNotFoundError(' Wind forecast data file not found')
+
+        # altitude array
+        alt = np.array(df['altitude'])
+
+        # Wind: west to east (x)
+        wind_W2E_tmp = np.array(df['Wind (from west)'])
+        # south to north (y)
+        wind_S2N_tmp = np.array(df['Wind (from south)'])
+        # Upward (z)
+        wind_UP = np.array(df['Wind (vertical)'])
+
+        # magnetic angle correction
+        theta = np.deg2rad(8.9)
+        wind_W2E = wind_W2E_tmp * np.cos(theta) + wind_S2N_tmp* np.sin(theta)
+        wind_S2N =  - wind_W2E_tmp * np.sin(theta) + wind_S2N_tmp* np.cos(theta)
+        # set as vector (blowing TO)
+        wind_vec_fore = np.c_[wind_W2E, wind_S2N, wind_UP].T
+
+        # setup wind_forecast interpolation function
+        self.wind_forecast = interpolate.interp1d(alt, wind_vec_fore, fill_value='extrapolate')
 
     # definition of wind log law
     def wind_log(self, h):
