@@ -563,6 +563,9 @@ class Parameters():
             # -------------------
             self.wind = self.wind_power
 
+        elif self.wind_model == 'log':
+            self.wind = self.wind_log
+
         elif self.wind_model == 'power-forecast-hydrid':
             # -------------------
             # power law and forecast hybrid model
@@ -604,7 +607,7 @@ class Parameters():
                 # NOTE: 2018/10/08: changed parameters for Izu-Riku Nov 2018
                 boundary_alt = 200.
                 transition = 100.
-                
+
                 if h <= boundary_alt - transition:
                     # use power law only
                     return self.wind_power(h)
@@ -622,14 +625,28 @@ class Parameters():
         else:
             raise ParameterDefineError('wind model definition is wrong.')
 
+    # definition of wind log law
+    def wind_log(self, h):
+        if h<=0.1:
+            # to avoid log(0)
+            h = 0.1
+        # END IF
+
+        # roughness of surface
+        roughness_surf = 0.166666
+
+        wind_vec = self.wind_unitvec * self.wind_speed *\
+           (np.log10(h/roughness_surf)/(np.log10(self.wind_alt_std/roughness_surf)))
+
+        return wind_vec
 
     # definition of wind power law
     def wind_power(self, h):
-            if h<0.:
-                h = 0.
-            # END IF
+        if h<0.:
+            h = 0.
+        # END IF
 
-            # wind velocity in local fixed coordinate (wind vector = direction blowing TO. Wind from west = [1,0,0])
-            wind_vec = self.wind_unitvec * self.wind_speed * (h/self.wind_alt_std)**self.Cwind
+        # wind velocity in local fixed coordinate (wind vector = direction blowing TO. Wind from west = [1,0,0])
+        wind_vec = self.wind_unitvec * self.wind_speed * (h/self.wind_alt_std)**self.Cwind
 
-            return wind_vec
+        return wind_vec
