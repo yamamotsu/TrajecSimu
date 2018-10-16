@@ -600,6 +600,31 @@ class Parameters():
             # END OF DIFINITION
 
             self.wind = wind_power_forecast
+        elif self.wind_model == 'log-forecast-hybrid':
+            def wind_log_forecast(h):
+                if h<=0.1:
+                    # to avoid log(0)
+                    h = 0.1
+
+                #boundary_alt = 100.
+                #transition = 20.
+
+                # NOTE: 2018/10/08: changed parameters for Izu-Riku Nov 2018
+                boundary_alt = 200.
+                transition = 100.
+
+                if h <= boundary_alt - transition:
+                    # use power law only
+                    return self.wind_log(h)
+                elif h <= boundary_alt + transition:
+                    # use both
+                    weight = (h - (boundary_alt-transition) ) / (2*transition)
+                    return weight*self.wind_forecast(h) + (1.-weight)*self.wind_log(h)
+                else:
+                    # use forecast only
+                    return self.wind_forecast(h)
+
+            self.wind = wind_log_forecast
         else:
             raise ParameterDefineError('wind model definition is wrong.')
 
