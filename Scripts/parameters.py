@@ -571,7 +571,7 @@ class Parameters():
             self.wind = self.wind_log
 
         elif self.wind_model == 'forecast':
-            seld.wind = self.wind_forecast
+            self.wind = self.wind_forecast
 
         elif self.wind_model == 'power-forecast-hybrid':
             # -------------------
@@ -666,10 +666,10 @@ class Parameters():
         # END IF
 
         # roughness of surface
-        roughness_surf = 0.166666
+        roughness_surf = 0.0003
 
         wind_vec = self.wind_unitvec * self.wind_speed *\
-           (np.log10(h/roughness_surf)/(np.log10(self.wind_alt_std/roughness_surf)))
+           (np.log10(h/roughness_surf)/np.log10(self.wind_alt_std/roughness_surf))
 
         return wind_vec
 
