@@ -1,40 +1,43 @@
 # TrajecSimu
 
 6-dof trajectory simulation for high-power rockets.  
-current version: 2.1 (7/2/2018)
+current version: 3.0 (11/1/2018)
 
-## Description
+## 概要
 Solves a 6-dof equation of motion for a trajectory of a transonic high-power rocket.  
 Limited to ones without attitude/trajectory control.
 
 Might have some problems on Windows/Linux.
 
-## Usage
+## 使い方
 
-### Requirement
-Basic python modules: numpy, scipy, pandas, matplotlib are required.  
-An external module is used for quaternion computaion, so please install: https://github.com/moble/quaternion
+### 必要なもの
+- Python3
+- Pythonライブラリ: numpy, scipy, pandas, matplotlib, numpy-quaternion(https://github.com/moble/quaternion)
 
-### Install
+### インストール
 
+#### ZIPダウンロード
+下記をクリックしてZIPダウンロード→展開
+https://github.com/yamamotsu/TrajecSimu/archive/master.zip
+
+#### gitでインストール
 ```sh
-$ git clone https://github.com/shugok/TrajecSimu
+$ git clone https://github.com/yamamotsu/TrajecSimu
 ```
 
-### Demo
-`driver_sample.py` is a sample driver code to run simulation. See comments in the file.  
+### サンプルコードを実行
+cloneまたはダウンロードした`TrajecSimu`のフォルダをコマンドプロンプトで開き,
+`python driver_sample.py`でサンプルコードを実行.
 
-A sample rocket configuration file `sample_config.csv` and a thrust curve `sample_thrust.csv` are available.
+`Thrustcurve_sample`内の`sample_thrust.csv`はエンジン推力データ(スラストカーブ)のサンプル,
+`Config_sample`内の`sample_config.csv`はロケットパラメータ設定ファイルのサンプルです.
 
-## Licence
+## ライセンス
 
-[MIT](https://github.com/tcnksm/tool/blob/master/LICENCE)
+このソフトウェアはMITライセンスのもとで公開されています.
+[MIT](https://github.com/yamamotsu/TrajecSimu/LICENSE)
 
 ## Author
 
-[shugok](https://github.com/shugok)
-
-
-
-
-
+[yamamotsu](https://github.com/yamamotsu)
