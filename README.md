@@ -19,6 +19,7 @@ Might have some problems on Windows/Linux.
 
 #### ZIPダウンロード
 下記をクリックしてZIPダウンロード→展開
+
 https://github.com/yamamotsu/TrajecSimu/archive/master.zip
 
 #### gitでインストール
@@ -36,7 +37,8 @@ cloneまたはダウンロードした`TrajecSimu`のフォルダをコマンド
 ## ライセンス
 
 このソフトウェアはMITライセンスのもとで公開されています.
-[MIT](https://github.com/yamamotsu/TrajecSimu/LICENSE)
+
+[MIT](https://github.com/yamamotsu/TrajecSimu/blob/master/LICENSE)
 
 ## Author
 
