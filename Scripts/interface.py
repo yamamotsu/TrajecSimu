@@ -39,6 +39,8 @@ class TrajecSimu_UI():
 
         # run a main computation
         self.myrocket.run()
+        # XXX: bad implement
+        print("MAX acceleration: {} [m/s^2]".format(self.myrocket.trajectory.max_accel))
         # post-process
         post = PostProcess_single(self.myrocket)
         post.postprocess('all')
@@ -74,6 +76,9 @@ class TrajecSimu_UI():
         self.v_launch_clear = np.zeros((n1, n2))     # lanuch clear air speed
         self.v_para_deploy  = np.zeros((n1, n2))     # parachute deploy air speed
 
+        # XXX: for Test
+        self.max_accel = np.zeros((n1, n2))
+
         # initialize array for parameter update
         params_update = [ ['wind_speed', 0.], ['wind_direction', 0.], ['t_para_delay', 0.], ['t_deploy', 0.] ]
 
@@ -106,6 +111,7 @@ class TrajecSimu_UI():
                 self.myrocket.Params.overwrite(params_update)
                 # run a single trajectory simulation
                 self.myrocket.run()
+
                 # post-process
                 post_bal = PostProcess_single(self.myrocket)
                 post_bal.postprocess('maxval')
@@ -123,6 +129,11 @@ class TrajecSimu_UI():
                 self.myrocket.Params.overwrite(params_update)
                 # run main computation
                 self.myrocket.run()
+
+                # XXX: Record max acceleration for test
+                print("MAX acceleration: {}".format(self.myrocket.trajectory.max_accel))
+                self.max_accel[i_speed, i_angle] = self.myrocket.trajectory.max_accel
+
                 # post-process and get landing location
                 post_para = PostProcess_single(self.myrocket)
                 post_para.postprocess('maxval')
@@ -300,6 +311,8 @@ class TrajecSimu_UI():
         bal_judge      = pd.DataFrame(self.res_bal, index = ws, columns = wd[:-1])
         para_judge     = pd.DataFrame(self.res_para, index = ws, columns = wd[:-1])
         judge_both     = pd.DataFrame(self.list_res_both, index = ws, columns = wd[:-1])
+        # Max acceleration
+        max_accel       = pd.DataFrame(self.max_accel, index = ws, columns = wd)
 
 
         # define output file name
@@ -320,6 +333,8 @@ class TrajecSimu_UI():
         loc_y_para.to_excel(excel_file, 'パラ y ')
         bal_judge.to_excel(excel_file, '弾道判定 ')
         para_judge.to_excel(excel_file, 'パラ判定 ')
+        # Max acceleration
+        max_accel.to_excel(excel_file, '最大加速度 ')
 
         # save excel file
         try:

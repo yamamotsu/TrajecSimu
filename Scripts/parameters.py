@@ -11,7 +11,8 @@ import pandas as pd
 from Scripts.errors import *
 from scipy import fftpack, interpolate, integrate
 from distutils.util import strtobool
-
+import json
+from Scripts.statistics_wind import *
 
 # class for parameters
 class Parameters():
@@ -192,12 +193,18 @@ class Parameters():
 
             #if self.wind_model == 'power-forecast-hydrid':
             #    self.wind_forecast_csvname = self.params_dict['forecast_csvname']        # csv file name of wind forecast model
-            if self.params_dict['forecast_csvname'] != None:
-                self.wind_forecast_csvname = self.params_dict['forecast_csvname']
+            if self.params_dict['forecast_csvname'] is not None:
+                self.wind_forecast_csvname\
+                    = self.params_dict['forecast_csvname']
                 self.setup_forcast()
 
+            if self.wind_model == 'statistics':
+                if self.params_dict['statistics_filename'] is not None:
+                    self.wind_statistics_filename\
+                        = self.params_dict['statistics_filename']
+                self.setup_statistics()
             # earth gravity
-            self.grav = np.array([0.,0.,-9.81])    # in fixed coordinate
+            self.grav = np.array([0., 0., -9.81])    # in fixed coordinate
 
         except:
             raise ParameterDefineError('launch condition')
@@ -572,7 +579,8 @@ class Parameters():
 
         elif self.wind_model == 'forecast':
             self.wind = self.wind_forecast
-
+        elif self.wind_model == 'statistics':
+            self.wind = self.wind_statistics
         elif self.wind_model == 'power-forecast-hybrid':
             # -------------------
             # power law and forecast hybrid model
@@ -658,9 +666,32 @@ class Parameters():
         # setup wind_forecast interpolation function
         self.wind_forecast = interpolate.interp1d(alt, wind_vec_fore, fill_value='extrapolate')
 
+    def setup_statistics(self):
+        try:
+            with open(self.wind_statistics_filename, 'r') as f:
+                params = json.load(f)
+        except:
+            raise FileNotFoundError(' Wind statistics data file not found')
+
+        print('statistics parameterfile loaded')
+        alt = params['alt_axis']
+        alt_index_std = params['altitude_idx_std']
+        n_alt = len(alt)
+        wind_std = params['mu4'][alt_index_std][2:]
+        wind_tmp = getStatWindVector(
+                        wind_statistics=params,
+                        wind_std=np.array(wind_std))
+        wind_vec_stat = np.c_[wind_tmp[0], wind_tmp[1], [0] * n_alt].T
+
+        # setup wind_statistics interpolation function
+        self.wind_statistics = interpolate.interp1d(
+                                alt,
+                                wind_vec_stat,
+                                fill_value='extrapolate')
+
     # definition of wind log law
     def wind_log(self, h):
-        if h<=0.1:
+        if h <= 0.1:
             # to avoid log(0)
             h = 0.1
         # END IF
