@@ -159,22 +159,29 @@ def getStatWindVector(wind_statistics, wind_std):
 '''
 
 
-def getStatWindVector(wind_statistics, wind_direction):
-    alt_index_std = wind_statistics['altitude_idx_std']
-    alt_axis = wind_statistics['alt_axis']
+def getStatWindVector(statistics_parameters, wind_direction_deg):
+    alt_index_std = statistics_parameters['altitude_idx_std']
+    alt_axis = statistics_parameters['alt_axis']
     # alt_std = alt_axis[alt_index_std]
     n_alt = len(alt_axis)
 
-    mu4 = np.array(wind_statistics['mu4'])
-    sigma4 = np.array(wind_statistics['sigma4'])
+    mu4 = np.array(statistics_parameters['mu4'])
+    sigma4 = np.array(statistics_parameters['sigma4'])
 
     # ----------------------------
     # 基準風の導出
     # ----------------------------
     mu_stdalt = mu4[alt_index_std][2:]
     sigma_stdalt = sigma4[alt_index_std][2:, 2:]
-    u_std, v_std = getProbEclipse(mu_stdalt, sigma_stdalt, alpha=0.95, n_plots=500)
-    wind_std = getAzimuthWindByPlot(u_std, v_std, np.deg2rad(wind_direction))
+    # u_std, v_std = getProbEclipse(mu_stdalt, sigma_stdalt, alpha=0.95, n_plots=500)
+    # wind_std = getAzimuthWindByPlot(u_std, v_std, np.deg2rad(wind_direction))
+    scale, M, _ = getEclipseParameters(mu_stdalt, sigma_stdalt, alpha=0.95)
+    wind_std = getAzimuthWindByEclipse(
+                        mu_stdalt,
+                        scale,
+                        M,
+                        np.deg2rad(wind_direction_deg)
+                        )
 
     # ----------------------------
     # Probabillity Eclipse
@@ -198,15 +205,14 @@ def getStatWindVector(wind_statistics, wind_direction):
             sigma_YY=sigma4[h][:2, :2],
             X=wind_std)
 
-        dU, dV = getProbEclipse(
-            mu=mu,
-            sigma=sigma,
-            alpha=0.99,
-            n_plots=500)
-        w = getAzimuthWindByPlot(
-                            dU + wind_std[0],
-                            dV + wind_std[1],
-                            np.deg2rad(wind_direction))
+        scale, M, _ = getEclipseParameters(mu, sigma, alpha=0.99)
+        w = getAzimuthWindByEclipse(
+                            mu,
+                            scale,
+                            M,
+                            np.deg2rad(wind_direction_deg)
+                            )
+
         stat_wind_u.append(w[0])
         stat_wind_v.append(w[1])
         print(

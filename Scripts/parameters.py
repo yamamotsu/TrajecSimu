@@ -183,8 +183,8 @@ class Parameters():
             self.p0 = float( self.params_dict['p0'] )  # pressure [Pa] at 10m alt.
 
             # wind property
-            wind_direction    = float( self.params_dict['wind_direction'] )               # azimuth where wind is blowing from [deg]
-            angle_wind        = np.deg2rad( (-wind_direction + 90.) )                     # angle to which wind goes (x orients east, y orients north)
+            self.wind_direction    = float( self.params_dict['wind_direction'] )               # azimuth where wind is blowing from [deg]
+            angle_wind        = np.deg2rad( (-self.wind_direction + 90.) )                     # angle to which wind goes (x orients east, y orients north)
             self.wind_unitvec = -np.array([np.cos(angle_wind), np.sin(angle_wind) ,0.])   # wind unitvector (blowing TO)
             self.wind_speed   = float( self.params_dict['wind_speed'] )                   # speed of wind [m/s] at 10m alt.
             self.Cwind        = 1./float( self.params_dict['wind_power_coeff'] )          # wind power coefficient
@@ -193,15 +193,15 @@ class Parameters():
 
             #if self.wind_model == 'power-forecast-hydrid':
             #    self.wind_forecast_csvname = self.params_dict['forecast_csvname']        # csv file name of wind forecast model
-            if self.params_dict['forecast_csvname'] is not None:
+            # if self.params_dict['forecast_csvname'] is not None:
+            if 'forecast_csvname' in self.params_dict:
                 self.wind_forecast_csvname\
                     = self.params_dict['forecast_csvname']
                 self.setup_forcast()
 
-            if self.wind_model == 'statistics':
-                if self.params_dict['statistics_filename'] is not None:
-                    self.wind_statistics_filename\
-                        = self.params_dict['statistics_filename']
+            if 'statistics_filename' in self.params_dict:
+                self.wind_statistics_filename\
+                    = self.params_dict['statistics_filename']
                 self.setup_statistics()
             # earth gravity
             self.grav = np.array([0., 0., -9.81])    # in fixed coordinate
@@ -632,7 +632,7 @@ class Parameters():
                 transition = 100.
 
                 if h <= boundary_alt - transition:
-                    # use power law only
+                    # use log law only
                     return self.wind_log(h)
                 elif h <= boundary_alt + transition:
                     # use both
@@ -643,6 +643,27 @@ class Parameters():
                     return self.wind_forecast(h)
 
             self.wind = wind_log_forecast
+        elif self.wind_model == 'power-statistics-hybrid':
+                def wind_power_statistics(h):
+                    if h < 0.:
+                        h = 0.
+
+                    boundary_alt = 1000.
+                    transition = 500.
+
+                    if h <= boundary_alt - transition:
+                        # use power law only
+                        return self.wind_power(h)
+                    elif h <= boundary_alt + transition:
+                        # use both
+                        weight = (h - (boundary_alt-transition) ) / (2*transition)
+                        return weight*self.wind_statistics(h) + (1.-weight)*self.wind_power(h)
+                    else:
+                        # use statistics only
+                        return self.wind_statistics(h)
+                    # END IF
+                # END OF DIFINITION
+                self.wind = wind_power_statistics
         else:
             raise ParameterDefineError('wind model definition is wrong.')
 
@@ -682,14 +703,22 @@ class Parameters():
 
         print('statistics parameterfile loaded')
         alt = params['alt_axis']
-        alt_index_std = params['altitude_idx_std']
+        # alt_index_std = params['altitude_idx_std']
         n_alt = len(alt)
-        wind_std = params['mu4'][alt_index_std][2:]
-        wind_tmp = getStatWindVector(
-                        wind_statistics=params,
-                        wind_std=np.array(wind_std))
-        wind_vec_stat = np.c_[wind_tmp[0], wind_tmp[1], [0] * n_alt].T
+        # wind_std = params['mu4'][alt_index_std][2:]
 
+        '''
+        wind_tmp = getStatWindVector(
+                        statistics_parameters=params,
+                        wind_std=np.array(wind_std))
+        '''
+
+        wind_tmp = getStatWindVector(
+                        statistics_parameters=params,
+                        wind_direction_deg=self.wind_direction
+                        )
+
+        wind_vec_stat = np.c_[wind_tmp[0], wind_tmp[1], [0] * n_alt].T
         # setup wind_statistics interpolation function
         self.wind_statistics = interpolate.interp1d(
                                 alt,
