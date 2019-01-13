@@ -78,6 +78,8 @@ class PostProcess_single():
             self.myrocket.trajectory.solution = self.myrocket.trajectory.solution[0:len(time),:]
 
             alt_axis = self.myrocket.trajectory.solution[:,2]
+            # alt_axis = np.arange(0, 5000, 1)
+
             # *** plot and show all results ***
             # thrust data echo
             self.echo_thrust(True)
@@ -596,7 +598,6 @@ class PostProcess_single():
         ax.set_zlabel('altitude [m]')
         ax.set_title('Altitude vs. Wind')
         plt.grid()
-
 
 
 class PostProcess_dist():
