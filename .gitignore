@@ -5,6 +5,7 @@ driver_felix_luminous.py
 Archive/
 Parameters_csv/
 Thrust_curve_csv/
+*.DS_Store
 *.eps
 *.png
 *.ipynb
