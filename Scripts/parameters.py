@@ -315,6 +315,7 @@ class Parameters():
                 if type(self.curve_fitting) == str:
                     self.curve_fitting = strtobool(self.curve_fitting)
                 self.fitting_order = self.params_dict['fitting_order']
+                self.fitting_order = int(self.params_dict['fitting_order'])
             # END IF
 
             # setup thrust fitting curve
