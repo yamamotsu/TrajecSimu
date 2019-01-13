@@ -113,3 +113,62 @@ def getStatWindVector(wind_statistics, wind_std):
 
     stat_wind = np.array([stat_wind_u, stat_wind_v])
     return stat_wind
+'''
+
+
+def getStatWindVector(wind_statistics, wind_direction):
+    alt_index_std = wind_statistics['altitude_idx_std']
+    alt_axis = wind_statistics['alt_axis']
+    # alt_std = alt_axis[alt_index_std]
+    n_alt = len(alt_axis)
+
+    mu4 = np.array(wind_statistics['mu4'])
+    sigma4 = np.array(wind_statistics['sigma4'])
+
+    # ----------------------------
+    # 基準風の導出
+    # ----------------------------
+    mu_stdalt = mu4[alt_index_std][2:]
+    sigma_stdalt = sigma4[alt_index_std][2:, 2:]
+    u_std, v_std = getProbEclipse(mu_stdalt, sigma_stdalt, alpha=0.95, n_plots=500)
+    wind_std = getAzimuthWindByPlot(u_std, v_std, np.deg2rad(wind_direction))
+
+    # ----------------------------
+    # Probabillity Eclipse
+    # ----------------------------
+    stat_wind_u = []
+    stat_wind_v = []
+    for h in range(n_alt):
+        if h == alt_index_std:
+            stat_wind_u.append(wind_std[0])
+            stat_wind_v.append(wind_std[1])
+            print(
+                'Altitude: ', alt_axis[h], ' Wind: ',
+                stat_wind_u[h], ', ', stat_wind_v[h])
+            continue
+        # u,vが決まった時のdu,dvの条件付き正規分布の平均と共分散行列
+        mu, sigma = getConditionalBivariateNorm(
+            mu_X=mu4[h][2:],
+            mu_Y=mu4[h][:2],
+            sigma_XX=sigma4[h][2:, 2:],
+            sigma_XY=sigma4[h][2:, :2],
+            sigma_YY=sigma4[h][:2, :2],
+            X=wind_std)
+
+        dU, dV = getProbEclipse(
+            mu=mu,
+            sigma=sigma,
+            alpha=0.99,
+            n_plots=500)
+        w = getAzimuthWindByPlot(
+                            dU + wind_std[0],
+                            dV + wind_std[1],
+                            np.deg2rad(wind_direction))
+        stat_wind_u.append(w[0])
+        stat_wind_v.append(w[1])
+        print(
+            'Altitude: ', alt_axis[h], ' ',
+            stat_wind_u[h], ', ', stat_wind_v[h])
+
+    stat_wind = np.array([stat_wind_u, stat_wind_v])
+    return stat_wind
