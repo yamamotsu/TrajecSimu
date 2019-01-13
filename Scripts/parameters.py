@@ -314,7 +314,7 @@ class Parameters():
                 self.curve_fitting = self.params_dict['curve_fitting']
                 if type(self.curve_fitting) == str:
                     self.curve_fitting = strtobool(self.curve_fitting)
-                self.fitting_order = self.params_dict['fitting_order']
+                self.fitting_order = int(self.params_dict['fitting_order'])
             # END IF
 
             # setup thrust fitting curve
@@ -384,12 +384,19 @@ class Parameters():
 
             if self.thrust_input_type == 'curve_const_t':
                 # raw thrust array
-                thrust_raw = input_raw
+                thrust_raw = input_raw[:, 1]
+
+                time_raw = input_raw[:, 0]
+                # thrust array
+                #self.time_array = time_raw * time_factor
+                #self.thrust_array = thrust_raw * thrust_factor
 
                 # cut off info where thrust is less that 1% of T_max
-                self.thrust_array = thrust_raw[ thrust_raw >= 0.01*np.max(thrust_raw) ] * thrust_factor
+                self.thrust_array = thrust_raw[thrust_raw >= 0.01*np.max(thrust_raw)]*thrust_factor
+
                 # time array
-                self.time_array = np.arange(0., len(self.thrust_array)*self.thrust_dt, self.thrust_dt) * time_factor
+                # self.time_array = np.arange(0., len(self.thrust_array)*self.thrust_dt, self.thrust_dt) * time_factor
+                self.time_array = time_raw[thrust_raw >= 0.01*np.max(thrust_raw)]*time_factor
 
             elif self.thrust_input_type == 'time_curve':
                 # time array
@@ -427,9 +434,9 @@ class Parameters():
                 tf   = fftpack.fft(self.thrust_array)
                 freq = fftpack.fftfreq(len(self.thrust_array), self.thrust_dt)
                 # filtering
-                fs = 5.                         # cut off frequency [Hz]
+                fs = 10.                         # cut off frequency [Hz]
                 tf2 = np.copy(tf)
-                tf2[(freq > fs)] = 0
+                tf2[np.abs(freq) > fs] = 0
                 # inverse FFT
                 self.thrust_array = np.real(fftpack.ifft(tf2))
             # END IF
