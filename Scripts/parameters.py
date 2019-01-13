@@ -427,9 +427,9 @@ class Parameters():
                 tf   = fftpack.fft(self.thrust_array)
                 freq = fftpack.fftfreq(len(self.thrust_array), self.thrust_dt)
                 # filtering
-                fs = 5.                         # cut off frequency [Hz]
+                fs = 10.                         # cut off frequency [Hz]
                 tf2 = np.copy(tf)
-                tf2[(freq > fs)] = 0
+                tf2[np.abs(freq) > fs] = 0
                 # inverse FFT
                 self.thrust_array = np.real(fftpack.ifft(tf2))
             # END IF
