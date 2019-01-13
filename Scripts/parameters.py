@@ -384,12 +384,19 @@ class Parameters():
 
             if self.thrust_input_type == 'curve_const_t':
                 # raw thrust array
-                thrust_raw = input_raw
+                thrust_raw = input_raw[:, 1]
+
+                time_raw = input_raw[:, 0]
+                # thrust array
+                #self.time_array = time_raw * time_factor
+                #self.thrust_array = thrust_raw * thrust_factor
 
                 # cut off info where thrust is less that 1% of T_max
-                self.thrust_array = thrust_raw[ thrust_raw >= 0.01*np.max(thrust_raw) ] * thrust_factor
+                self.thrust_array = thrust_raw[thrust_raw >= 0.01*np.max(thrust_raw)]*thrust_factor
+
                 # time array
-                self.time_array = np.arange(0., len(self.thrust_array)*self.thrust_dt, self.thrust_dt) * time_factor
+                # self.time_array = np.arange(0., len(self.thrust_array)*self.thrust_dt, self.thrust_dt) * time_factor
+                self.time_array = time_raw[thrust_raw >= 0.01*np.max(thrust_raw)]*time_factor
 
             elif self.thrust_input_type == 'time_curve':
                 # time array
