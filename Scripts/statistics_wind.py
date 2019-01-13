@@ -1,10 +1,7 @@
-import json
 import numpy as np
 import numpy.linalg as LA
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-
-direction_std = 0.5 * np.pi
+import sympy
+# direction_std = 0.5 * np.pi
 
 
 def getConditionalBivariateNorm(mu_X, mu_Y, sigma_XX, sigma_XY, sigma_YY, X):
@@ -49,6 +46,51 @@ def getAzimuthWindByPlot(U, V, azimuth_rad):
     return np.array([U[idx], V[idx]])
 
 
+def getAzimuthWindByEclipse(center_pos, scale, rotateMatrix, wind_direction):
+    # 媒介変数表示による楕円 U(t), V(t)と V = alpha * U (alphaは飛行方位の傾き)の関係から
+    # 方程式を立ててtについて解き、U,V を求める。
+    t = sympy.Symbol('t')
+    x = scale[0] * sympy.cos(t)
+    y = scale[1] * sympy.sin(t)
+    U = rotateMatrix[0, 0] * x + rotateMatrix[0, 1] * y + center_pos[0]
+    V = rotateMatrix[1, 0] * x + rotateMatrix[1, 1] * y + center_pos[1]
+    alpha = sympy.cot(wind_direction)
+    print('alpha: ', alpha)
+    expr = V - alpha * U
+    print(expr)
+    # expr3 = V - alpha * U
+    t_solutions_tmp = sympy.solve(expr)
+    t_solutions = [float(t) for t in t_solutions_tmp]
+    print('solutions: ', t_solutions)
+
+    n_solutions = len(t_solutions)
+    wind_tmp = np.zeros((n_solutions, 2))
+    for i, t_solution in enumerate(t_solutions):
+        wind_tmp[i] = [
+                        float(U.subs(t, t_solution)),
+                        float(V.subs(t, t_solution))]
+        print('U(t=', t_solution, '): ', U.subs(t, t_solution))
+        print('V(t=', t_solution, '): ', V.subs(t, t_solution))
+
+    print('wind_tmp: ', wind_tmp)
+    az_wind_directions = np.arctan2(-wind_tmp.T[0], -wind_tmp.T[1])
+    direction_diff = np.round(az_wind_directions - wind_direction, 8)
+    mask = direction_diff == 0
+    print('mask: ', mask)
+    if not mask.any():
+        idx = np.argmax(LA.norm(wind_tmp.T, axis=0))
+        azimuth_wind = wind_tmp[idx]
+    else:
+        idx = np.argmax(LA.norm(wind_tmp[mask].T, axis=0))
+        azimuth_wind = wind_tmp[idx]
+    # print('norm: ', LA.norm(wind_tmp.T, axis=0))
+    # max_index = np.argmax(LA.norm(azimuth_wind.T, axis=0))
+    # max_index = np.argmax(LA.norm(wind_tmp.T, axis=0))
+    # wind = np.max()
+    print('azimuth_wind: ', azimuth_wind)
+    return azimuth_wind
+
+
 def getProbEclipse(mu, sigma, alpha=0.95, n_plots=100):
     # mu: 平均 ([alt][x|y])
     # sigma: 分散共分散行列
@@ -66,6 +108,7 @@ def getProbEclipse(mu, sigma, alpha=0.95, n_plots=100):
     return plots[0], plots[1]
 
 
+'''
 def getStatWindVector(wind_statistics, wind_std):
     alt_index_std = wind_statistics['altitude_idx_std']
     alt_axis = wind_statistics['alt_axis']
