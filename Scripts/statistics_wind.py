@@ -12,7 +12,7 @@ def getConditionalBivariateNorm(mu_X, mu_Y, sigma_XX, sigma_XY, sigma_YY, X):
     return mu, Sigma
 
 
-def getEclipseParameters(mu, sigma, alpha=0.95):
+def getEllipseParameters(mu, sigma, alpha=0.95):
     # mu: 平均 ([alt][x|y])
     # sigma: 分散共分散行列
     # alpha: 楕円内に点が入る確率
@@ -24,7 +24,7 @@ def getEclipseParameters(mu, sigma, alpha=0.95):
     return scale, M, mu
 
 
-def getEclipsePlot(a, b, Mrot=None, angle_rad=0, x0=0, y0=0, n_plots=100):
+def getEllipsePlot(a, b, Mrot=None, angle_rad=0, x0=0, y0=0, n_plots=100):
     theta = np.linspace(0, 2 * np.pi, n_plots)
 
     v0 = np.array([x0, y0])
@@ -46,7 +46,7 @@ def getAzimuthWindByPlot(U, V, azimuth_rad):
     return np.array([U[idx], V[idx]])
 
 
-def getAzimuthWindByEclipse(center_pos, scale, rotateMatrix, wind_direction):
+def getAzimuthWindByEllipse(center_pos, scale, rotateMatrix, wind_direction):
     # 媒介変数表示による楕円 U(t), V(t)と V = alpha * U (alphaは飛行方位の傾き)の関係から
     # 方程式を立ててtについて解き、U,V を求める。
     t = sympy.Symbol('t')
@@ -91,14 +91,14 @@ def getAzimuthWindByEclipse(center_pos, scale, rotateMatrix, wind_direction):
     return azimuth_wind
 
 
-def getProbEclipse(mu, sigma, alpha=0.95, n_plots=100):
+def getProbEllipse(mu, sigma, alpha=0.95, n_plots=100):
     # mu: 平均 ([alt][x|y])
     # sigma: 分散共分散行列
     # alpha: 楕円内に点が入る確率
     # n_plots: プロット数
 
-    scale, M, _ = getEclipseParameters(mu, sigma, alpha)
-    plots = getEclipsePlot(
+    scale, M, _ = getEllipseParameters(mu, sigma, alpha)
+    plots = getEllipsePlot(
         scale[0],
         scale[1],
         M,
@@ -119,7 +119,7 @@ def getStatWindVector(wind_statistics, wind_std):
     sigma4 = np.array(wind_statistics['sigma4'])
 
     # ----------------------------
-    # Probabillity Eclipse
+    # Probabillity Ellipse
     # ----------------------------
     stat_wind_u = []
     stat_wind_v = []
@@ -140,7 +140,7 @@ def getStatWindVector(wind_statistics, wind_std):
             sigma_YY=sigma4[h][:2, :2],
             X=wind_std)
 
-        dU, dV = getProbEclipse(
+        dU, dV = getProbEllipse(
             mu=mu,
             sigma=sigma,
             alpha=0.99)
@@ -173,10 +173,10 @@ def getStatWindVector(statistics_parameters, wind_direction_deg):
     # ----------------------------
     mu_stdalt = mu4[alt_index_std][2:]
     sigma_stdalt = sigma4[alt_index_std][2:, 2:]
-    # u_std, v_std = getProbEclipse(mu_stdalt, sigma_stdalt, alpha=0.95, n_plots=500)
+    # u_std, v_std = getProbEllipse(mu_stdalt, sigma_stdalt, alpha=0.95, n_plots=500)
     # wind_std = getAzimuthWindByPlot(u_std, v_std, np.deg2rad(wind_direction))
-    scale, M, _ = getEclipseParameters(mu_stdalt, sigma_stdalt, alpha=0.95)
-    wind_std = getAzimuthWindByEclipse(
+    scale, M, _ = getEllipseParameters(mu_stdalt, sigma_stdalt, alpha=0.95)
+    wind_std = getAzimuthWindByEllipse(
                         mu_stdalt,
                         scale,
                         M,
@@ -184,7 +184,7 @@ def getStatWindVector(statistics_parameters, wind_direction_deg):
                         )
 
     # ----------------------------
-    # Probabillity Eclipse
+    # Probabillity Ellipse
     # ----------------------------
     stat_wind_u = []
     stat_wind_v = []
@@ -205,8 +205,8 @@ def getStatWindVector(statistics_parameters, wind_direction_deg):
             sigma_YY=sigma4[h][:2, :2],
             X=wind_std)
 
-        scale, M, _ = getEclipseParameters(mu, sigma, alpha=0.99)
-        w = getAzimuthWindByEclipse(
+        scale, M, _ = getEllipseParameters(mu, sigma, alpha=0.99)
+        w = getAzimuthWindByEllipse(
                             mu,
                             scale,
                             M,
